@@ -1,4 +1,7 @@
+apscheduler>=3.10.4
 apify-client>=1.8.1
+google-api-python-client>=2.154.0
+google-auth>=2.36.0
 python-dotenv>=1.0.1
 pytest>=9.0.0
 requests>=2.32.0

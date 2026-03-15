@@ -4,7 +4,8 @@ from services.pipeline.run_mvp_pipeline import run_mvp_pipeline
 from services.pipeline import run_mvp_pipeline as pipeline_module
 
 
-def test_run_mvp_pipeline_runs_full_flow(monkeypatch):
+def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
+    caplog.set_level("INFO")
     query = "ai customer success platform"
     vendor_candidates = [
         {"vendor_name": "Gainsight", "website": "https://gainsight.com", "source": "web_search"},
@@ -33,8 +34,36 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch):
         "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
     }
     sheet_rows = {
-        "Gainsight": {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
-        "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
+        "Gainsight": {
+            "vendor_name": "Gainsight",
+            "website": "https://gainsight.com",
+            "source": "",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
+        "Vitally": {
+            "vendor_name": "Vitally",
+            "website": "https://vitally.io",
+            "source": "",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
     }
     calls = []
 
@@ -70,12 +99,45 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch):
         "vendor_intelligence_to_sheet_row",
         fake_vendor_intelligence_to_sheet_row,
     )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator.google_sheets,
+        "append_rows_to_google_sheet",
+        lambda rows: calls.append(("append_rows_to_google_sheet", len(rows))),
+    )
 
     result = run_mvp_pipeline(query)
 
     assert result == [
-        {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
-        {"vendor_name": "Vitally", "website": "https://vitally.io"},
+        {
+            "vendor_name": "Gainsight",
+            "website": "https://gainsight.com",
+            "source": "web_search",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
+        {
+            "vendor_name": "Vitally",
+            "website": "https://vitally.io",
+            "source": "web_search",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
     ]
     assert calls == [
         ("search_web", query),
@@ -85,7 +147,9 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch):
         ("fetch_vendor_homepage", "Vitally"),
         ("extract_vendor_intelligence", "Vitally"),
         ("vendor_intelligence_to_sheet_row", "Vitally"),
+        ("append_rows_to_google_sheet", 2),
     ]
+    assert "Pipeline completed with 2 sheet rows; skipped 0 existing vendors" in caplog.text
 
 
 def test_run_mvp_pipeline_returns_empty_list_when_no_vendors(monkeypatch):
@@ -101,6 +165,11 @@ def test_run_mvp_pipeline_returns_empty_list_when_no_vendors(monkeypatch):
         pipeline_module.vendor_fetcher,
         "fetch_vendor_homepage",
         fail_fetch_vendor_homepage,
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator.google_sheets,
+        "append_rows_to_google_sheet",
+        lambda rows: None,
     )
 
     result = run_mvp_pipeline("no results query")
@@ -137,8 +206,36 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
     }
     sheet_rows = {
-        "Gainsight": {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
-        "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
+        "Gainsight": {
+            "vendor_name": "Gainsight",
+            "website": "https://gainsight.com",
+            "source": "",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
+        "Vitally": {
+            "vendor_name": "Vitally",
+            "website": "https://vitally.io",
+            "source": "",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
     }
     calls = []
 
@@ -180,6 +277,11 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         "vendor_intelligence_to_sheet_row",
         fake_vendor_intelligence_to_sheet_row,
     )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator.google_sheets,
+        "append_rows_to_google_sheet",
+        lambda rows: calls.append(("append_rows_to_google_sheet", len(rows))),
+    )
     monkeypatch.setattr(pipeline_module.supabase_client, "is_configured", lambda: True)
     monkeypatch.setattr(pipeline_module.supabase_client, "vendor_exists", fake_vendor_exists)
     monkeypatch.setattr(
@@ -196,8 +298,36 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
     result = run_mvp_pipeline(query)
 
     assert result == [
-        {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
-        {"vendor_name": "Vitally", "website": "https://vitally.io"},
+        {
+            "vendor_name": "Gainsight",
+            "website": "https://gainsight.com",
+            "source": "web_search",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
+        {
+            "vendor_name": "Vitally",
+            "website": "https://vitally.io",
+            "source": "web_search",
+            "mission": "",
+            "usp": "",
+            "use_cases": "",
+            "lifecycle_stages": "",
+            "pricing": "",
+            "free_trial": "",
+            "soc2": "",
+            "founded": "",
+            "confidence": "",
+            "evidence_urls": "",
+        },
     ]
     assert calls == [
         ("search_web", query),
@@ -207,4 +337,5 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         ("fetch_vendor_homepage", "Vitally"),
         ("extract_vendor_intelligence", "Vitally"),
         ("vendor_intelligence_to_sheet_row", "Vitally"),
+        ("append_rows_to_google_sheet", 2),
     ]

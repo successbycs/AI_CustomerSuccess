@@ -9,6 +9,8 @@ Always align with:
 - docs/product_design.md
 - this file: docs/codex_guardrails.md
 
+The canonical Customer Success lifecycle is defined in `docs/product_design.md` and must be kept consistent across discovery, extraction, classification, storage, and export.
+
 ## Implementation Rules
 - Make the smallest change that satisfies the task
 - Do not redesign the architecture unless explicitly requested

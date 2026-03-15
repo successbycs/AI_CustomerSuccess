@@ -14,17 +14,34 @@ if TYPE_CHECKING:
 
 def is_configured() -> bool:
     """Return True when the Supabase environment variables are available."""
-    return bool(os.getenv("SUPABASE_URL")) and bool(os.getenv("SUPABASE_KEY"))
+    return get_supabase_config() is not None
 
 
-def get_supabase_client() -> "Client":
-    """Create a Supabase client from environment variables."""
+def get_supabase_config() -> dict[str, str] | None:
+    """Return Supabase config from environment variables when present."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
 
     if not supabase_url or not supabase_key:
+        return None
+
+    return {
+        "url": supabase_url,
+        "key": supabase_key,
+    }
+
+
+def get_supabase_client() -> "Client":
+    """Create a Supabase client from environment variables."""
+    config = get_supabase_config()
+    if config is None:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set")
 
+    return _create_supabase_client(config["url"], config["key"])
+
+
+def _create_supabase_client(supabase_url: str, supabase_key: str) -> "Client":
+    """Create the underlying Supabase client instance."""
     from supabase import create_client
 
     return create_client(supabase_url, supabase_key)

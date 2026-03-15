@@ -1,8 +1,6 @@
 name: Weekly Digest
 
 on:
-  schedule:
-    - cron: "0 8 * * 1"
   workflow_dispatch:
 
 jobs:
@@ -40,6 +38,7 @@ jobs:
               "Onboard",
               "Activate",
               "Adopt",
+              "Support",
               "Expand",
               "Renew",
               "Advocate",

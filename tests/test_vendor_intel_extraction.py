@@ -3,15 +3,17 @@
 from services.extraction.vendor_intel import extract_vendor_intelligence
 
 
-def test_extract_vendor_intelligence_populates_use_cases_and_value_statements():
+def test_extract_vendor_intelligence_populates_richer_use_cases_and_value_statements():
     homepage_payload = {
         "vendor_name": "ExampleCorp",
         "website": "https://example.com",
         "text": (
-            "Our platform improves adoption, speeds time to value, and helps teams "
-            "reduce churn. We automate workflows for onboarding and support, "
-            "while improving customer health and increasing retention with "
-            "usage analytics and renewal automation."
+            "Our customer success platform offers conversational intelligence, onboarding automation, "
+            "implementation portals, and faster time to value. Teams use health scoring, usage analytics, "
+            "and customer health signals to improve adoption and reduce churn. Signal-to-playbook workflows "
+            "surface stakeholder mapping and expansion revenue opportunities. Support automation and ticket triage "
+            "reduce support workload. Renewal automation, forecasting, "
+            "and risk alerts help increase retention, while voice of customer and case studies strengthen advocacy."
         ),
     }
 
@@ -19,27 +21,44 @@ def test_extract_vendor_intelligence_populates_use_cases_and_value_statements():
 
     assert result.vendor_name == "ExampleCorp"
     assert result.website == "https://example.com"
+    assert result.mission.startswith("Our customer success platform offers")
+    assert result.usp == "speed time to value"
     assert result.icp == [
+        "meeting intelligence",
         "onboarding",
-        "churn",
-        "retention",
-        "support",
-        "automation",
-        "health",
-        "adoption",
-        "renewal",
+        "time to value",
+        "health scoring",
+        "usage analytics",
+        "playbook automation",
+        "support automation",
+        "ticket triage",
+        "expansion",
+        "stakeholder mapping",
+        "renewal management",
+        "churn prevention",
+        "voice of customer",
+        "customer advocacy",
     ]
     assert result.value_statements == [
+        "speed time to value",
         "reduce churn",
         "improve adoption",
-        "automate workflows",
         "improve customer health",
+        "reduce support workload",
+        "automate workflows",
+        "automate onboarding",
         "increase retention",
-        "speed time to value",
+        "grow expansion revenue",
+        "improve renewal forecasting",
+        "strengthen customer advocacy",
     ]
-    assert result.lifecycle_stages == ["Onboard", "Adopt", "Renew"]
+    assert result.lifecycle_stages == ["Sign", "Onboard", "Adopt", "Support", "Expand", "Renew", "Advocate"]
+    assert result.confidence == "high"
     assert result.case_studies == []
     assert result.pricing == []
+    assert result.free_trial is None
+    assert result.soc2 is None
+    assert result.founded == ""
 
 
 def test_extract_vendor_intelligence_returns_empty_lists_when_no_keywords_match():
@@ -54,6 +73,67 @@ def test_extract_vendor_intelligence_returns_empty_lists_when_no_keywords_match(
     assert result.icp == []
     assert result.value_statements == []
     assert result.lifecycle_stages == []
+    assert result.confidence == "low"
+
+
+def test_extract_vendor_intelligence_maps_onboarding_signals_to_onboard():
+    homepage_payload = {
+        "vendor_name": "OnboardAI",
+        "website": "https://onboard.example.com",
+        "text": "Implementation portals and onboarding automation help teams speed time to value.",
+    }
+
+    result = extract_vendor_intelligence(homepage_payload)
+
+    assert result.lifecycle_stages == ["Onboard"]
+
+
+def test_extract_vendor_intelligence_maps_health_and_usage_signals_to_adopt():
+    homepage_payload = {
+        "vendor_name": "AdoptAI",
+        "website": "https://adopt.example.com",
+        "text": "Health scoring, customer health dashboards, and usage analytics drive playbook automation.",
+    }
+
+    result = extract_vendor_intelligence(homepage_payload)
+
+    assert result.lifecycle_stages == ["Adopt"]
+
+
+def test_extract_vendor_intelligence_maps_support_signals_to_support():
+    homepage_payload = {
+        "vendor_name": "SupportAI",
+        "website": "https://support.example.com",
+        "text": "Support automation, ticket triage, agent assist, and knowledge base workflows reduce support workload.",
+    }
+
+    result = extract_vendor_intelligence(homepage_payload)
+
+    assert result.lifecycle_stages == ["Support"]
+
+
+def test_extract_vendor_intelligence_maps_churn_and_renewal_signals_to_renew():
+    homepage_payload = {
+        "vendor_name": "RenewAI",
+        "website": "https://renew.example.com",
+        "text": "Churn prediction, renewal automation, and risk alerts improve forecasting for renewals.",
+    }
+
+    result = extract_vendor_intelligence(homepage_payload)
+
+    assert result.lifecycle_stages == ["Renew"]
+
+
+def test_extract_vendor_intelligence_maps_advocacy_signals_to_advocate():
+    homepage_payload = {
+        "vendor_name": "AdvocateAI",
+        "website": "https://advocate.example.com",
+        "text": "NPS, voice of customer programs, reference management, and case studies power advocacy.",
+    }
+
+    result = extract_vendor_intelligence(homepage_payload)
+
+    assert result.lifecycle_stages == ["Advocate"]
 
 
 def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
@@ -65,6 +145,7 @@ def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
             "Our onboarding automation and time-to-value tooling support implementation teams. "
             "In-app guidance and product walkthroughs boost activation. "
             "Usage analytics and health scoring help customer health teams. "
+            "Support automation and ticket triage reduce support workload. "
             "Stakeholder mapping drives expansion revenue. "
             "Churn prediction and risk alerts improve renewals. "
             "NPS and voice of customer programs help advocacy."
@@ -78,6 +159,7 @@ def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
         "Onboard",
         "Activate",
         "Adopt",
+        "Support",
         "Expand",
         "Renew",
         "Advocate",

@@ -49,9 +49,10 @@ def run_mvp_pipeline(
 
     logger.info("Starting MVP pipeline for query: %s", query)
     vendor_rows: list[SheetRow] = []
+    skipped_existing_count = 0
 
     vendor_candidates = search_web_fn(query)
-    logger.info("Discovered %s vendor candidates", len(vendor_candidates))
+    logger.info("Discovered %s vendor candidates after discovery filtering", len(vendor_candidates))
 
     for vendor in vendor_candidates:
         website = vendor["website"]
@@ -61,6 +62,7 @@ def run_mvp_pipeline(
             try:
                 if vendor_exists_fn(website):
                     logger.info("Skipping existing vendor: %s", vendor_name)
+                    skipped_existing_count += 1
                     continue
             except Exception as error:
                 if supabase_client.is_persistence_unavailable_error(error):
@@ -86,7 +88,14 @@ def run_mvp_pipeline(
                     raise
 
         sheet_row = vendor_intelligence_to_sheet_row_fn(intelligence)
+        if not sheet_row.get("source"):
+            sheet_row["source"] = vendor.get("source", "")
         vendor_rows.append(sheet_row)
 
-    logger.info("Pipeline completed with %s sheet rows", len(vendor_rows))
+    google_sheets.append_rows_to_google_sheet(vendor_rows)
+    logger.info(
+        "Pipeline completed with %s sheet rows; skipped %s existing vendors",
+        len(vendor_rows),
+        skipped_existing_count,
+    )
     return vendor_rows

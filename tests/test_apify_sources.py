@@ -60,7 +60,7 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
                 {
                     "title": "OnboardFlow",
                     "url": "https://onboardflow.io",
-                    "description": "Onboarding automation for SaaS teams",
+                    "description": "Onboarding automation for customer success teams",
                 }
             ],
         }
@@ -102,7 +102,7 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
         {
             "company_name": "OnboardFlow",
             "website": "https://onboardflow.io",
-            "raw_description": "Onboarding automation for SaaS teams",
+            "raw_description": "Onboarding automation for customer success teams",
             "source": "google_search",
         },
     ]
@@ -163,4 +163,137 @@ def test_fetch_google_search_uses_organic_result_urls_not_google_domain(monkeypa
             "raw_description": "Renewal automation software",
             "source": "google_search",
         },
+    ]
+
+
+def test_fetch_google_search_filters_junk_domains_and_generic_content(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "Google Search",
+                    "url": "https://www.google.com/search?q=customer+success+ai",
+                    "description": "Search results page",
+                },
+                {
+                    "title": "Any CSMs doing neat things with AI? : r/CustomerSuccess",
+                    "url": "https://www.reddit.com/r/CustomerSuccess/comments/abc123",
+                    "description": "Community discussion about tools",
+                },
+                {
+                    "title": "Best Customer Success Platforms Reviews 2026",
+                    "url": "https://www.gartner.com/reviews/market/customer-success-management-platforms",
+                    "description": "Compare top customer success platforms",
+                },
+                {
+                    "title": "Customer Success Blog: how to improve retention",
+                    "url": "https://examplemedia.com/blog/customer-success-retention",
+                    "description": "Guide for reducing churn",
+                },
+                {
+                    "title": "VendorFlow",
+                    "url": "https://vendorflow.io",
+                    "description": "Customer success AI platform for onboarding automation",
+                },
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+
+    results = apify_sources.fetch_google_search(["customer success ai"])
+
+    assert results == [
+        {
+            "company_name": "VendorFlow",
+            "website": "https://vendorflow.io",
+            "raw_description": "Customer success AI platform for onboarding automation",
+            "source": "google_search",
+        }
+    ]
+
+
+def test_fetch_google_search_keeps_vendor_domains_and_prefers_root_homepage(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "AI for Customer Success: 7 tools that actually deliver value",
+                    "url": "https://dock.us/blog/ai-for-customer-success-tools",
+                    "description": "Customer success software with AI workflows",
+                }
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+
+    results = apify_sources.fetch_google_search(["customer success ai"])
+
+    assert results == [
+        {
+            "company_name": "Dock",
+            "website": "https://dock.us",
+            "raw_description": "Customer success software with AI workflows",
+            "source": "google_search",
+        }
+    ]
+
+
+def test_fetch_google_search_uses_domain_name_for_vendor_hosted_listicle_titles(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "CSM Tools: 15 Best Customer Success Platforms for 2026",
+                    "url": "https://usepylon.com/blog/customer-success-platforms",
+                    "description": "Customer success software for onboarding and product adoption",
+                }
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+
+    results = apify_sources.fetch_google_search(["customer success ai"])
+
+    assert results == [
+        {
+            "company_name": "Usepylon",
+            "website": "https://usepylon.com",
+            "raw_description": "Customer success software for onboarding and product adoption",
+            "source": "google_search",
+        }
+    ]
+
+
+def test_fetch_google_search_drops_generic_ai_tools_without_cs_signals(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "Forecast Copilot",
+                    "url": "https://forecastcopilot.ai",
+                    "description": "AI software for revenue teams",
+                },
+                {
+                    "title": "RenewPilot",
+                    "url": "https://renewpilot.ai",
+                    "description": "Renewal automation for customer success teams",
+                },
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+
+    results = apify_sources.fetch_google_search(["customer success ai"])
+
+    assert results == [
+        {
+            "company_name": "RenewPilot",
+            "website": "https://renewpilot.ai",
+            "raw_description": "Renewal automation for customer success teams",
+            "source": "google_search",
+        }
     ]

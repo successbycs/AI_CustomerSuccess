@@ -14,6 +14,8 @@ python3 -m venv .venv
 ```
 
 The CLI loads environment variables from a local `.env` file automatically.
+Google Sheets output is optional and uses `GOOGLE_SHEETS_ID` plus
+`GOOGLE_SHEETS_CREDENTIALS_JSON`.
 
 ## Run Tests
 
@@ -29,6 +31,31 @@ Write Google Sheets-ready CSV output to `outputs/vendor_rows.csv`:
 
 ```sh
 .venv/bin/python scripts/run_pipeline.py "ai customer success platform"
+```
+
+Run the Python-owned scheduler:
+
+```sh
+.venv/bin/python -m services.pipeline.scheduler
+```
+
+Run one scheduled job manually:
+
+```sh
+.venv/bin/python -m services.pipeline.scheduler --run-now discovery
+.venv/bin/python -m services.pipeline.scheduler --run-now digest
+```
+
+Optional Supabase smoke test:
+
+```sh
+.venv/bin/python scripts/check_supabase.py
+```
+
+Integration diagnostics:
+
+```sh
+.venv/bin/python scripts/check_integrations.py
 ```
 
 ## MVP Flow

@@ -60,3 +60,60 @@ def test_fetch_vendor_homepage_handles_network_error(monkeypatch):
     }
 
     assert result == expected
+
+
+def test_fetch_vendor_homepage_prefers_homepage_derived_vendor_name(monkeypatch):
+    class MockResponse:
+        def __init__(self, status_code, text):
+            self.status_code = status_code
+            self.text = text
+
+    def mock_get(url, timeout=None):
+        return MockResponse(
+            200,
+            (
+                '<html><head><meta property="og:site_name" content="Pylon" />'
+                "<title>CSM Tools: 15 Best Customer Success Platforms for 2026</title></head>"
+                "<body><h1>Pylon</h1></body></html>"
+            ),
+        )
+
+    monkeypatch.setattr(vendor_fetcher.requests, "get", mock_get)
+
+    vendor = {
+        "vendor_name": "CSM Tools: 15 Best Customer Success Platforms for 2026",
+        "website": "https://usepylon.com",
+        "source": "web_search",
+    }
+
+    result = vendor_fetcher.fetch_vendor_homepage(vendor)
+
+    assert result["vendor_name"] == "Pylon"
+
+
+def test_fetch_vendor_homepage_uses_domain_fallback_when_homepage_name_is_weak(monkeypatch):
+    class MockResponse:
+        def __init__(self, status_code, text):
+            self.status_code = status_code
+            self.text = text
+
+    def mock_get(url, timeout=None):
+        return MockResponse(
+            200,
+            (
+                "<html><head><title>Best Customer Success Platforms 2026</title></head>"
+                "<body><h1>Customer Success Platform</h1></body></html>"
+            ),
+        )
+
+    monkeypatch.setattr(vendor_fetcher.requests, "get", mock_get)
+
+    vendor = {
+        "vendor_name": "Best Customer Success Platforms 2026",
+        "website": "https://usepylon.com",
+        "source": "web_search",
+    }
+
+    result = vendor_fetcher.fetch_vendor_homepage(vendor)
+
+    assert result["vendor_name"] == "Usepylon"

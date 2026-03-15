@@ -2,8 +2,12 @@
 
 This repository implements the pipeline described in `docs/product_design.md`. The core unit of analysis is the vendor, not individual web pages. Python owns all orchestration, scheduling, and business logic. Apify is used exclusively as a crawling utility called on instruction from Python.
 
-This version introduces a dual extraction architecture:
-Level 1 deterministic extraction and Level 2 LLM extraction using a ChatGPT model. Both operate independently and are merged by Python before persistence.
+The target architecture introduces a dual extraction model:
+Level 1 deterministic extraction and Level 2 LLM extraction using a ChatGPT model.
+
+Current implementation status:
+the active code path in this repo is deterministic-first and currently runs only Level 1 extraction.
+Level 2 and merge logic remain planned, not active.
 
 ---
 
@@ -59,19 +63,21 @@ Apify is not used for enrichment.
 
 services/extraction/
 
-Implements the dual extraction architecture.
+Currently implements the deterministic extraction layer.
 
-rule_extractor.py
+vendor_intel.py
 
 Level 1 deterministic extraction using rule-based keyword detection. Extracts baseline signals such as:
 
 use_cases  
 value_statements  
 product_capabilities  
+lifecycle_stages  
+confidence  
 
 This extractor guarantees structured output even if LLM extraction fails.
 
-llm_extractor.py
+llm_extractor.py (planned)
 
 Level 2 semantic extraction using a ChatGPT model.
 
@@ -86,7 +92,7 @@ SOC2 mentions
 founded information  
 confidence score  
 
-merge_results.py
+merge_results.py (planned)
 
 Combines the deterministic extraction results and the LLM extraction results into a single `VendorIntelligence` object.
 
@@ -107,12 +113,13 @@ Contains `lifecycle_classifier.py`.
 
 Lifecycle classification is deterministic and handled by Python, not the LLM.
 
-Extracted signals are mapped to the SuccessByCS 7-stage lifecycle framework:
+Extracted signals are mapped to the SuccessByCS 8-stage lifecycle framework:
 
 Sign  
 Onboard  
 Activate  
 Adopt  
+Support  
 Expand  
 Renew  
 Advocate  
@@ -122,6 +129,7 @@ Multiple lifecycle stages may be assigned to a vendor.
 Example signal mappings:
 
 health score → Adopt  
+support automation → Support  
 churn prediction → Renew  
 NPS → Advocate  
 upsell detection → Expand  
@@ -177,7 +185,7 @@ candidate normalisation
 domain deduplication  
 Supabase deduplication check  
 homepage enrichment  
-dual extraction  
+deterministic extraction  
 lifecycle classification  
 persistence  
 Google Sheets export
@@ -233,8 +241,9 @@ CLI wrapper for running the pipeline manually.
 
 Examples:
 
-python scripts/run_pipeline.py --run-now discovery  
-python scripts/run_pipeline.py --run-now digest
+python scripts/run_pipeline.py "ai customer success platform"  
+python -m services.pipeline.scheduler --run-now discovery  
+python -m services.pipeline.scheduler --run-now digest
 
 ---
 

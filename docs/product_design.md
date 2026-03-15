@@ -2,12 +2,16 @@
 
 This document describes the architecture for the AI Customer Success Vendor Intelligence system.
 
-The system discovers companies offering AI-enabled products that support the Customer Success lifecycle, enriches vendor websites to collect key information, extracts structured commercial intelligence, classifies vendors against the SuccessByCS 7-stage lifecycle framework, and produces a structured dataset in Supabase and Google Sheets.
+The system discovers companies offering AI-enabled products that support the Customer Success lifecycle, enriches vendor websites to collect key information, extracts structured commercial intelligence, classifies vendors against the SuccessByCS 8-stage lifecycle framework, and produces a structured dataset in Supabase and Google Sheets.
 
 The core unit of analysis is the vendor/company, not individual web pages.
 
-This version introduces a dual-extraction architecture:
-Level 1 deterministic extraction and Level 2 LLM-assisted extraction. Both are independent and interchangeable.
+The target architecture introduces a dual-extraction model:
+Level 1 deterministic extraction and Level 2 LLM-assisted extraction.
+
+Current implementation status:
+the codebase at this checkpoint implements Level 1 deterministic extraction only.
+Level 2 remains planned work and is not active in the current MVP pipeline.
 
 ---
 
@@ -23,20 +27,21 @@ Each vendor row contains fields such as:
 
 vendor_name  
 website  
-discovery_source  
+source  
 mission  
-unique_selling_proposition  
+usp  
 use_cases  
 lifecycle_stages  
 pricing  
 free_trial  
 soc2  
 founded  
-date_added  
+confidence  
+evidence_urls  
 
 ---
 
-# The SuccessByCS 7-Stage Lifecycle Framework
+# The SuccessByCS 8-Stage Lifecycle Framework
 
 Every vendor in the system is classified against this framework.
 
@@ -55,6 +60,9 @@ In-app guidance, user education, product walkthroughs, adoption nudges
 
 Adopt  
 Health scoring, usage analytics, sentiment analysis, signal-to-playbook automation
+
+Support  
+Support automation, ticket triage, agent assist, help desk copilots, knowledge base tooling
 
 Expand  
 Upsell detection, cross-sell intelligence, expansion revenue tools, stakeholder mapping
@@ -111,7 +119,7 @@ If Apify were replaced with another crawling provider tomorrow, only services/di
 
 Daily pipeline
 
-Scheduler fires at 07:00 UTC  
+Python APScheduler fires at 07:00 UTC inside the running service  
 ↓  
 Python orchestrator triggers discovery  
 ↓  
@@ -129,10 +137,6 @@ Python fetches homepage text (3000-5000 characters)
 ↓  
 Level 1 deterministic extraction runs  
 ↓  
-Level 2 LLM extraction runs  
-↓  
-Python merges results  
-↓  
 Python classifies lifecycle stages  
 ↓  
 Python upserts to Supabase  
@@ -141,7 +145,7 @@ Python appends row to Google Sheets
 
 Weekly digest
 
-Scheduler fires Monday 08:00 UTC  
+Python APScheduler fires Monday 08:00 UTC inside the running service  
 ↓  
 Python queries vendors added in last 7 days  
 ↓  
@@ -157,7 +161,9 @@ Python marks vendors as no longer new
 
 Python owns its own scheduling.
 
-No external cron or GitHub Actions are required.
+The pipeline is triggered by the Python service itself, not by GitHub Actions.
+
+No external cron or GitHub Actions are part of the target design.
 
 APScheduler is used.
 
@@ -177,8 +183,8 @@ Railway or Render must auto-restart the service if it crashes.
 
 Manual runs can be triggered with:
 
-python -m services.pipeline.orchestrator --run-now discovery  
-python -m services.pipeline.orchestrator --run-now digest  
+python -m services.pipeline.scheduler --run-now discovery  
+python -m services.pipeline.scheduler --run-now digest  
 
 ---
 
@@ -247,14 +253,15 @@ crawl_date
 
 # Extraction Strategy
 
-The system uses two independent extraction methods.
+The target system uses two independent extraction methods.
 
 Both operate on the same homepage text.
 
-Level 1 provides deterministic extraction.  
-Level 2 provides semantic extraction via LLM.
+Current checkpoint:
+Level 1 deterministic extraction is implemented and is the only active extraction layer.
+Level 2 semantic extraction via LLM remains planned and is not yet active.
 
-Level 1 guarantees baseline structured output even if Level 2 fails.
+Level 1 guarantees baseline structured output even before Level 2 exists.
 
 ---
 
@@ -361,6 +368,7 @@ Python maps extracted signals to lifecycle stages.
 Example mapping
 
 health score → Adopt  
+support automation → Support  
 churn prediction → Renew  
 NPS → Advocate  
 upsell detection → Expand  
@@ -408,18 +416,19 @@ Google Sheets is a human-readable export layer.
 
 Columns
 
-Company  
-Website  
-Source  
-Mission  
-USP  
-Use Cases  
-Lifecycle Stages  
-Pricing  
-Free Trial  
-SOC2  
-Founded  
-Date Added  
+vendor_name  
+website  
+source  
+mission  
+usp  
+use_cases  
+lifecycle_stages  
+pricing  
+free_trial  
+soc2  
+founded  
+confidence  
+evidence_urls  
 
 Python authenticates using a service account.
 
@@ -444,6 +453,9 @@ SIGN
 Vendor | website  
 
 ONBOARD  
+Vendor | website  
+
+SUPPORT  
 Vendor | website  
 
 ADVOCATE  

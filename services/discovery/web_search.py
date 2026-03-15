@@ -6,7 +6,7 @@ from services.discovery import apify_sources
 
 
 def search_web(query: str) -> list[dict[str, str]]:
-    """Return vendor candidates using Apify Google Search."""
+    """Return filtered vendor candidates using Apify Google Search."""
     candidates = apify_sources.fetch_google_search([query])
     return [
         {
