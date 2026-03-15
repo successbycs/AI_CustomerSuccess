@@ -5,11 +5,12 @@ This module provides functions to export vendor intelligence to Google Sheets fo
 
 from __future__ import annotations
 
-from typing import Dict, Any
 from services.extraction.vendor_intel import VendorIntelligence
 
 
-def vendor_intelligence_to_sheet_row(vendor_intel: VendorIntelligence) -> Dict[str, Any]:
+def vendor_intelligence_to_sheet_row(
+    vendor_intel: VendorIntelligence,
+) -> dict[str, str]:
     """Convert a VendorIntelligence object into a flat Google Sheets row dictionary.
 
     Args:
@@ -30,7 +31,7 @@ def vendor_intelligence_to_sheet_row(vendor_intel: VendorIntelligence) -> Dict[s
 
 
 # Placeholder for future Google Sheets API integration
-def append_to_google_sheet(rows: list[Dict[str, Any]], sheet_id: str) -> None:
+def append_to_google_sheet(rows: list[dict[str, str]], sheet_id: str) -> None:
     """Placeholder function to append rows to a Google Sheet.
 
     This is a stub for future implementation.

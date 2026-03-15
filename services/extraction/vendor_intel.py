@@ -6,17 +6,16 @@ This module defines the schema used to represent extracted vendor intelligence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 
 @dataclass
 class VendorIntelligence:
     vendor_name: str
     website: str
-    icp: List[str] = field(default_factory=list)
-    case_studies: List[str] = field(default_factory=list)
-    value_statements: List[str] = field(default_factory=list)
-    pricing: List[str] = field(default_factory=list)
+    icp: list[str] = field(default_factory=list)
+    case_studies: list[str] = field(default_factory=list)
+    value_statements: list[str] = field(default_factory=list)
+    pricing: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         """Validate the schema structure and types.
@@ -37,7 +36,9 @@ class VendorIntelligence:
                 raise TypeError(f"All items in {field_name} must be strings")
 
 
-def extract_vendor_intelligence(homepage_payload: dict) -> VendorIntelligence:
+def extract_vendor_intelligence(
+    homepage_payload: dict[str, str | int],
+) -> VendorIntelligence:
     """Convert a homepage payload into a VendorIntelligence object.
 
     This MVP implementation keeps extraction simple and only maps the

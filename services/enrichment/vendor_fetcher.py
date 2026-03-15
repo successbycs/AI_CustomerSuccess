@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import re
 import requests
-from typing import Dict, Any
 
 
-def fetch_vendor_homepage(vendor: Dict[str, Any]) -> Dict[str, Any]:
+def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     """Fetch the homepage for a vendor and return structured page data.
 
     Args:

@@ -8,11 +8,10 @@ integration (e.g., Google Search API, Bing Search API, etc.) in an MVP build.
 
 from __future__ import annotations
 
-from typing import List, Dict, Any
 from urllib.parse import urlparse
 
 
-def search_web(query: str) -> List[Dict[str, Any]]:
+def search_web(query: str) -> list[dict[str, str]]:
     """Return a list of candidate vendor records for the given query.
 
     Args:
@@ -27,7 +26,7 @@ def search_web(query: str) -> List[Dict[str, Any]]:
     return _normalize_urls_to_vendors(urls)
 
 
-def _call_search_api(query: str) -> List[str]:
+def _call_search_api(query: str) -> list[str]:
     """Placeholder for search API integration.
 
     This function is intentionally simplistic so it can be mocked in tests.
@@ -39,7 +38,7 @@ def _call_search_api(query: str) -> List[str]:
     return ["https://gainsight.com", "https://vitally.io"]
 
 
-def _normalize_urls_to_vendors(urls: List[str]) -> List[Dict[str, Any]]:
+def _normalize_urls_to_vendors(urls: list[str]) -> list[dict[str, str]]:
     """Convert URLs to normalized vendor candidate dictionaries."""
     vendors = []
     for url in urls:
