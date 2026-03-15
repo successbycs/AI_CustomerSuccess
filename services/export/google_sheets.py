@@ -19,15 +19,18 @@ logger = logging.getLogger(__name__)
 GOOGLE_SHEETS_COLUMNS = [
     "vendor_name",
     "website",
-    "source",
     "mission",
     "usp",
+    "icp",
     "use_cases",
     "lifecycle_stages",
     "pricing",
     "free_trial",
     "soc2",
     "founded",
+    "case_studies",
+    "customers",
+    "value_statements",
     "confidence",
     "evidence_urls",
 ]
@@ -47,15 +50,18 @@ def vendor_intelligence_to_sheet_row(
     return {
         "vendor_name": vendor_intel.vendor_name,
         "website": vendor_intel.website,
-        "source": vendor_intel.source,
         "mission": vendor_intel.mission,
         "usp": vendor_intel.usp,
-        "use_cases": "|".join(vendor_intel.icp),  # Map ICP to use_cases
+        "icp": "|".join(vendor_intel.icp),
+        "use_cases": "|".join(vendor_intel.use_cases),
         "lifecycle_stages": "|".join(vendor_intel.lifecycle_stages),
         "pricing": "|".join(vendor_intel.pricing),
         "free_trial": _stringify_boolean(vendor_intel.free_trial),
         "soc2": _stringify_boolean(vendor_intel.soc2),
         "founded": vendor_intel.founded,
+        "case_studies": "|".join(vendor_intel.case_studies),
+        "customers": "|".join(vendor_intel.customers),
+        "value_statements": "|".join(vendor_intel.value_statements),
         "confidence": vendor_intel.confidence,
         "evidence_urls": "|".join(vendor_intel.evidence_urls),
     }
@@ -68,15 +74,18 @@ def write_rows_to_csv(rows: list[dict[str, str]], output_path: Path) -> None:
     fieldnames = [
         "vendor_name",
         "website",
-        "source",
         "mission",
         "usp",
+        "icp",
         "use_cases",
         "lifecycle_stages",
         "pricing",
         "free_trial",
         "soc2",
         "founded",
+        "case_studies",
+        "customers",
+        "value_statements",
         "confidence",
         "evidence_urls",
     ]
@@ -109,7 +118,7 @@ def append_rows_to_google_sheet(rows: list[dict[str, str]]) -> None:
         .values()
         .append(
             spreadsheetId=sheet_id,
-            range="vendors!A:M",
+            range="vendors!A:P",
             valueInputOption="USER_ENTERED",
             body={"values": values},
         )

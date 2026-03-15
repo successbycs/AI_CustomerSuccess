@@ -11,8 +11,10 @@ def test_vendor_intelligence_schema_fields_and_types():
         mission="Improve retention",
         usp="reduce churn",
         icp=["SaaS", "Mid-market"],
+        use_cases=["health scoring", "renewal management"],
         lifecycle_stages=["Adopt", "Support", "Renew"],
         case_studies=["Increased retention by 20%", "Reduced churn"],
+        customers=["Acme"],
         value_statements=["Increases retention", "Boosts ARR"],
         pricing=["$99/mo", "$199/mo"],
         free_trial=True,
@@ -29,8 +31,10 @@ def test_vendor_intelligence_schema_fields_and_types():
     assert vendor.website == "https://example.com"
     assert vendor.source == "web_search"
     assert isinstance(vendor.icp, list)
+    assert isinstance(vendor.use_cases, list)
     assert isinstance(vendor.lifecycle_stages, list)
     assert isinstance(vendor.case_studies, list)
+    assert isinstance(vendor.customers, list)
     assert isinstance(vendor.value_statements, list)
     assert isinstance(vendor.pricing, list)
     assert isinstance(vendor.evidence_urls, list)

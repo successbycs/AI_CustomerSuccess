@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from services.extraction.page_text_extractor import extract_visible_text
+
 
 def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     """Fetch the homepage for a vendor and return structured page data.
@@ -28,7 +30,7 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
         response = requests.get(website, timeout=10)
         html = response.text
         vendor_name = _resolve_vendor_name(vendor.get("vendor_name", ""), website, html)
-        text = _extract_visible_text(html)
+        text = extract_visible_text(html)
         status_code = response.status_code
     except requests.RequestException:
         html = ""
@@ -37,23 +39,12 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     return {
         "vendor_name": vendor_name,
         "website": website,
+        "source": vendor.get("source", ""),
         "page_type": "homepage",
         "status_code": status_code,
         "html": html,
         "text": text
     }
-
-
-def _extract_visible_text(html_content: str) -> str:
-    """Return basic visible text from homepage HTML."""
-    without_scripts = re.sub(
-        r"<(script|style)[^>]*>.*?</\1>",
-        " ",
-        html_content,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    without_tags = re.sub(r"<[^>]+>", " ", without_scripts)
-    return re.sub(r"\s+", " ", html.unescape(without_tags)).strip()
 
 
 def _resolve_vendor_name(search_name: str, website: str, html_content: str) -> str:

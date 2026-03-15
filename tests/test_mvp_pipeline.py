@@ -15,6 +15,7 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
         "Gainsight": {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
+            "source": "web_search",
             "page_type": "homepage",
             "status_code": 200,
             "html": "<html>Gainsight</html>",
@@ -23,44 +24,56 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
         "Vitally": {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
+            "source": "web_search",
             "page_type": "homepage",
             "status_code": 200,
             "html": "<html>Vitally</html>",
             "text": "Vitally homepage",
         },
     }
+    explored_pages = {
+        "Gainsight": {"homepage": homepage_payloads["Gainsight"]},
+        "Vitally": {"homepage": homepage_payloads["Vitally"]},
+    }
     intelligence_objects = {
         "Gainsight": {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
         "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
     }
+    profile_objects = intelligence_objects
     sheet_rows = {
         "Gainsight": {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
-            "source": "",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
         "Vitally": {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
-            "source": "",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
@@ -75,9 +88,18 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
         calls.append(("fetch_vendor_homepage", vendor["vendor_name"]))
         return homepage_payloads[vendor["vendor_name"]]
 
-    def fake_extract_vendor_intelligence(homepage_payload: dict):
-        calls.append(("extract_vendor_intelligence", homepage_payload["vendor_name"]))
-        return intelligence_objects[homepage_payload["vendor_name"]]
+    def fake_explore_vendor_site(homepage_payload: dict):
+        calls.append(("explore_vendor_site", homepage_payload["vendor_name"]))
+        return explored_pages[homepage_payload["vendor_name"]]
+
+    def fake_extract_vendor_intelligence(explored_page_payloads: dict):
+        vendor_name = explored_page_payloads["homepage"]["vendor_name"]
+        calls.append(("extract_vendor_intelligence", vendor_name))
+        return intelligence_objects[vendor_name]
+
+    def fake_build_vendor_profile(vendor: dict, _explored_pages: dict, intelligence: dict):
+        calls.append(("build_vendor_profile", vendor["vendor_name"]))
+        return profile_objects[intelligence["vendor_name"]]
 
     def fake_vendor_intelligence_to_sheet_row(vendor_intelligence: dict):
         calls.append(("vendor_intelligence_to_sheet_row", vendor_intelligence["vendor_name"]))
@@ -90,9 +112,19 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
         fake_fetch_vendor_homepage,
     )
     monkeypatch.setattr(
+        pipeline_module.site_explorer,
+        "explore_vendor_site",
+        fake_explore_vendor_site,
+    )
+    monkeypatch.setattr(
         pipeline_module.vendor_intel,
         "extract_vendor_intelligence",
         fake_extract_vendor_intelligence,
+    )
+    monkeypatch.setattr(
+        pipeline_module.vendor_profile_builder,
+        "build_vendor_profile",
+        fake_build_vendor_profile,
     )
     monkeypatch.setattr(
         pipeline_module.google_sheets,
@@ -111,30 +143,36 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
         {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
-            "source": "web_search",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
         {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
-            "source": "web_search",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
@@ -142,10 +180,14 @@ def test_run_mvp_pipeline_runs_full_flow(monkeypatch, caplog):
     assert calls == [
         ("search_web", query),
         ("fetch_vendor_homepage", "Gainsight"),
+        ("explore_vendor_site", "Gainsight"),
         ("extract_vendor_intelligence", "Gainsight"),
+        ("build_vendor_profile", "Gainsight"),
         ("vendor_intelligence_to_sheet_row", "Gainsight"),
         ("fetch_vendor_homepage", "Vitally"),
+        ("explore_vendor_site", "Vitally"),
         ("extract_vendor_intelligence", "Vitally"),
+        ("build_vendor_profile", "Vitally"),
         ("vendor_intelligence_to_sheet_row", "Vitally"),
         ("append_rows_to_google_sheet", 2),
     ]
@@ -187,6 +229,7 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         "Gainsight": {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
+            "source": "web_search",
             "page_type": "homepage",
             "status_code": 200,
             "html": "<html>Gainsight</html>",
@@ -195,44 +238,56 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         "Vitally": {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
+            "source": "web_search",
             "page_type": "homepage",
             "status_code": 200,
             "html": "<html>Vitally</html>",
             "text": "Vitally homepage",
         },
     }
+    explored_pages = {
+        "Gainsight": {"homepage": homepage_payloads["Gainsight"]},
+        "Vitally": {"homepage": homepage_payloads["Vitally"]},
+    }
     intelligence_objects = {
         "Gainsight": {"vendor_name": "Gainsight", "website": "https://gainsight.com"},
         "Vitally": {"vendor_name": "Vitally", "website": "https://vitally.io"},
     }
+    profile_objects = intelligence_objects
     sheet_rows = {
         "Gainsight": {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
-            "source": "",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
         "Vitally": {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
-            "source": "",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
@@ -250,9 +305,18 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         calls.append(("fetch_vendor_homepage", vendor["vendor_name"]))
         return homepage_payloads[vendor["vendor_name"]]
 
-    def fake_extract_vendor_intelligence(homepage_payload: dict):
-        calls.append(("extract_vendor_intelligence", homepage_payload["vendor_name"]))
-        return intelligence_objects[homepage_payload["vendor_name"]]
+    def fake_explore_vendor_site(homepage_payload: dict):
+        calls.append(("explore_vendor_site", homepage_payload["vendor_name"]))
+        return explored_pages[homepage_payload["vendor_name"]]
+
+    def fake_extract_vendor_intelligence(explored_page_payloads: dict):
+        vendor_name = explored_page_payloads["homepage"]["vendor_name"]
+        calls.append(("extract_vendor_intelligence", vendor_name))
+        return intelligence_objects[vendor_name]
+
+    def fake_build_vendor_profile(vendor: dict, _explored_pages: dict, intelligence: dict):
+        calls.append(("build_vendor_profile", vendor["vendor_name"]))
+        return profile_objects[intelligence["vendor_name"]]
 
     def fake_vendor_intelligence_to_sheet_row(vendor_intelligence: dict):
         calls.append(("vendor_intelligence_to_sheet_row", vendor_intelligence["vendor_name"]))
@@ -268,9 +332,19 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         fake_fetch_vendor_homepage,
     )
     monkeypatch.setattr(
+        pipeline_module.site_explorer,
+        "explore_vendor_site",
+        fake_explore_vendor_site,
+    )
+    monkeypatch.setattr(
         pipeline_module.vendor_intel,
         "extract_vendor_intelligence",
         fake_extract_vendor_intelligence,
+    )
+    monkeypatch.setattr(
+        pipeline_module.vendor_profile_builder,
+        "build_vendor_profile",
+        fake_build_vendor_profile,
     )
     monkeypatch.setattr(
         pipeline_module.google_sheets,
@@ -301,30 +375,36 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
         {
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
-            "source": "web_search",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
         {
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
-            "source": "web_search",
             "mission": "",
             "usp": "",
+            "icp": "",
             "use_cases": "",
             "lifecycle_stages": "",
             "pricing": "",
             "free_trial": "",
             "soc2": "",
             "founded": "",
+            "case_studies": "",
+            "customers": "",
+            "value_statements": "",
             "confidence": "",
             "evidence_urls": "",
         },
@@ -332,10 +412,14 @@ def test_run_mvp_pipeline_continues_when_persistence_is_unavailable(monkeypatch)
     assert calls == [
         ("search_web", query),
         ("fetch_vendor_homepage", "Gainsight"),
+        ("explore_vendor_site", "Gainsight"),
         ("extract_vendor_intelligence", "Gainsight"),
+        ("build_vendor_profile", "Gainsight"),
         ("vendor_intelligence_to_sheet_row", "Gainsight"),
         ("fetch_vendor_homepage", "Vitally"),
+        ("explore_vendor_site", "Vitally"),
         ("extract_vendor_intelligence", "Vitally"),
+        ("build_vendor_profile", "Vitally"),
         ("vendor_intelligence_to_sheet_row", "Vitally"),
         ("append_rows_to_google_sheet", 2),
     ]

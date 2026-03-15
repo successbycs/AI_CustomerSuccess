@@ -27,15 +27,18 @@ Each vendor row contains fields such as:
 
 vendor_name  
 website  
-source  
 mission  
 usp  
+icp  
 use_cases  
 lifecycle_stages  
 pricing  
 free_trial  
 soc2  
 founded  
+case_studies  
+customers  
+value_statements  
 confidence  
 evidence_urls  
 
@@ -94,7 +97,7 @@ services/discovery
 calls Apify actors and returns normalised vendor candidates
 
 services/enrichment  
-fetches homepage content and extracts visible text
+fetches homepage content, explores vendor pages, and extracts visible text
 
 services/extraction  
 performs vendor intelligence extraction (Level 1 deterministic + Level 2 LLM)
@@ -135,7 +138,13 @@ New vendors proceed to enrichment
 ↓  
 Python fetches homepage text (3000-5000 characters)  
 ↓  
+Python explores up to 5 high-signal vendor pages  
+↓  
+Python extracts clean visible text from those pages  
+↓  
 Level 1 deterministic extraction runs  
+↓  
+Python builds one vendor profile record  
 ↓  
 Python classifies lifecycle stages  
 ↓  
@@ -238,16 +247,35 @@ Process
 
 Python fetches homepage via requests  
 10 second timeout  
-HTML stripped  
-Visible text extracted  
-Text truncated to 3000-5000 characters  
+up to 5 pages per vendor  
+pricing, product, case studies, about, security  
+unreachable pages skipped safely  
+
+Returned page payloads include cleaned visible text suitable for deterministic extraction.
 
 Output structure
 
-vendor_name  
-website  
-text  
-crawl_date  
+homepage  
+pricing_page  
+product_page  
+case_studies_page  
+about_page  
+security_page  
+
+---
+
+# Page Text Extraction
+
+Goal
+
+Extract clean visible text from fetched vendor HTML pages.
+
+Process
+
+Remove scripts  
+Remove navigation and footer noise  
+Normalise whitespace  
+Return clean readable text for rule extraction  
 
 ---
 
@@ -255,9 +283,55 @@ crawl_date
 
 The target system uses two independent extraction methods.
 
-Both operate on the same homepage text.
+Both operate on the same vendor page dataset.
 
 Current checkpoint:
+Level 1 deterministic extraction is active across homepage plus explored high-signal pages.
+Level 2 remains planned work.
+
+Current deterministic fields include:
+
+mission  
+usp  
+icp  
+use_cases  
+lifecycle_stages  
+pricing  
+free_trial  
+soc2  
+founded  
+case_studies  
+customers  
+value_statements  
+confidence  
+
+---
+
+# Vendor Profile Builder
+
+Goal
+
+Merge discovery metadata, explored pages, and extracted signals into a single directory-ready vendor intelligence record.
+
+Directory-compatible profile fields:
+
+vendor_name  
+website  
+mission  
+usp  
+icp  
+use_cases  
+lifecycle_stages  
+pricing  
+free_trial  
+soc2  
+founded  
+case_studies  
+customers  
+value_statements  
+confidence  
+evidence_urls  
+
 Level 1 deterministic extraction is implemented and is the only active extraction layer.
 Level 2 semantic extraction via LLM remains planned and is not yet active.
 
@@ -273,7 +347,7 @@ Provide reliable baseline signal extraction.
 
 Implementation
 
-services/extraction/rule_extractor.py
+services/extraction/vendor_intel.py
 
 Rule-based keyword detection identifies:
 
@@ -305,9 +379,19 @@ speed time to value
 
 Output structure
 
+mission  
+usp  
+icp  
 use_cases  
+lifecycle_stages  
+pricing  
+free_trial  
+soc2  
+founded  
+case_studies  
+customers  
 value_statements  
-signals  
+confidence  
 
 This extraction method is deterministic and fully testable.
 
@@ -418,15 +502,18 @@ Columns
 
 vendor_name  
 website  
-source  
 mission  
 usp  
+icp  
 use_cases  
 lifecycle_stages  
 pricing  
 free_trial  
 soc2  
 founded  
+case_studies  
+customers  
+value_statements  
 confidence  
 evidence_urls  
 

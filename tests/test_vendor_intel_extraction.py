@@ -1,78 +1,101 @@
-"""Tests for rule-based vendor intelligence extraction."""
+"""Tests for deterministic vendor intelligence extraction."""
 
 from services.extraction.vendor_intel import extract_vendor_intelligence
 
 
-def test_extract_vendor_intelligence_populates_richer_use_cases_and_value_statements():
-    homepage_payload = {
-        "vendor_name": "ExampleCorp",
-        "website": "https://example.com",
-        "text": (
-            "Our customer success platform offers conversational intelligence, onboarding automation, "
-            "implementation portals, and faster time to value. Teams use health scoring, usage analytics, "
-            "and customer health signals to improve adoption and reduce churn. Signal-to-playbook workflows "
-            "surface stakeholder mapping and expansion revenue opportunities. Support automation and ticket triage "
-            "reduce support workload. Renewal automation, forecasting, "
-            "and risk alerts help increase retention, while voice of customer and case studies strengthen advocacy."
-        ),
+def test_extract_vendor_intelligence_populates_directory_fields_from_explored_pages():
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "ExampleCorp",
+            "website": "https://example.com",
+            "source": "google_search",
+            "text": (
+                "ExampleCorp helps customer success teams at SaaS companies reduce churn and improve adoption. "
+                "Our customer success platform offers conversational intelligence, onboarding automation, "
+                "implementation portals, health scoring, usage analytics, support automation, ticket triage, "
+                "renewal automation, voice of customer programs, and stakeholder mapping. Founded in 2021."
+            ),
+        },
+        "pricing_page": {
+            "vendor_name": "",
+            "website": "https://example.com/pricing",
+            "text": "Plans start at $99 per user per month. Start free with a free trial or contact sales.",
+        },
+        "case_studies_page": {
+            "vendor_name": "",
+            "website": "https://example.com/customers",
+            "text": "Customer stories and case studies show how Acme uses ExampleCorp.",
+        },
+        "security_page": {
+            "vendor_name": "",
+            "website": "https://example.com/security",
+            "text": "SOC 2 compliant and ISO 27001 certified.",
+        },
     }
 
-    result = extract_vendor_intelligence(homepage_payload)
+    result = extract_vendor_intelligence(explored_pages)
 
     assert result.vendor_name == "ExampleCorp"
     assert result.website == "https://example.com"
-    assert result.mission.startswith("Our customer success platform offers")
-    assert result.usp == "speed time to value"
-    assert result.icp == [
+    assert result.source == "google_search"
+    assert result.mission.startswith("ExampleCorp helps customer success teams")
+    assert result.usp == "reduce churn"
+    assert result.icp == ["SaaS companies", "customer success teams"]
+    assert result.use_cases == [
         "meeting intelligence",
         "onboarding",
-        "time to value",
         "health scoring",
         "usage analytics",
-        "playbook automation",
         "support automation",
         "ticket triage",
-        "expansion",
         "stakeholder mapping",
         "renewal management",
         "churn prevention",
         "voice of customer",
         "customer advocacy",
     ]
+    assert result.lifecycle_stages == ["Sign", "Onboard", "Adopt", "Support", "Expand", "Renew", "Advocate"]
+    assert result.pricing == ["$", "per user", "per month", "contact sales"]
+    assert result.free_trial is True
+    assert result.soc2 is True
+    assert result.founded == "2021"
+    assert result.case_studies == ["case study", "customer story", "how customers use the product"]
+    assert result.customers == ["Acme"]
     assert result.value_statements == [
-        "speed time to value",
         "reduce churn",
         "improve adoption",
         "improve customer health",
         "reduce support workload",
-        "automate workflows",
         "automate onboarding",
         "increase retention",
-        "grow expansion revenue",
         "improve renewal forecasting",
         "strengthen customer advocacy",
     ]
-    assert result.lifecycle_stages == ["Sign", "Onboard", "Adopt", "Support", "Expand", "Renew", "Advocate"]
     assert result.confidence == "high"
-    assert result.case_studies == []
-    assert result.pricing == []
-    assert result.free_trial is None
-    assert result.soc2 is None
-    assert result.founded == ""
+    assert result.evidence_urls == [
+        "https://example.com",
+        "https://example.com/pricing",
+        "https://example.com/customers",
+        "https://example.com/security",
+    ]
 
 
 def test_extract_vendor_intelligence_returns_empty_lists_when_no_keywords_match():
     homepage_payload = {
         "vendor_name": "ExampleCorp",
         "website": "https://example.com",
-        "text": "Customer success platform for modern SaaS teams.",
+        "text": "Customer platform for modern teams.",
     }
 
     result = extract_vendor_intelligence(homepage_payload)
 
     assert result.icp == []
+    assert result.use_cases == []
     assert result.value_statements == []
     assert result.lifecycle_stages == []
+    assert result.pricing == []
+    assert result.case_studies == []
+    assert result.customers == []
     assert result.confidence == "low"
 
 
@@ -134,6 +157,38 @@ def test_extract_vendor_intelligence_maps_advocacy_signals_to_advocate():
     result = extract_vendor_intelligence(homepage_payload)
 
     assert result.lifecycle_stages == ["Advocate"]
+
+
+def test_extract_vendor_intelligence_detects_icp_pricing_soc2_and_case_study_signals():
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "SignalsAI",
+            "website": "https://signals.example.com",
+            "text": "Built for B2B startups and product-led teams.",
+        },
+        "pricing_page": {
+            "vendor_name": "",
+            "website": "https://signals.example.com/pricing",
+            "text": "$49 per seat per month.",
+        },
+        "case_studies_page": {
+            "vendor_name": "",
+            "website": "https://signals.example.com/customers",
+            "text": "Customer stories and case studies.",
+        },
+        "security_page": {
+            "vendor_name": "",
+            "website": "https://signals.example.com/security",
+            "text": "SOC2 ready.",
+        },
+    }
+
+    result = extract_vendor_intelligence(explored_pages)
+
+    assert result.icp == ["B2B startups", "product-led teams"]
+    assert result.pricing == ["$", "per seat", "per month"]
+    assert result.soc2 is True
+    assert result.case_studies == ["case study", "customer story"]
 
 
 def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():

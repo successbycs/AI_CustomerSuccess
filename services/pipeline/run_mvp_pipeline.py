@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from services.discovery import web_search
+from services.enrichment import site_explorer
 from services.enrichment import vendor_fetcher
 from services.extraction import vendor_intel
+from services.extraction import vendor_profile_builder
 from services.export import google_sheets
 from services.persistence import supabase_client
 from services.pipeline import orchestrator
@@ -23,7 +25,9 @@ def run_mvp_pipeline(query: str) -> list[dict[str, str]]:
         query,
         search_web_fn=web_search.search_web,
         fetch_vendor_homepage_fn=vendor_fetcher.fetch_vendor_homepage,
+        explore_vendor_site_fn=site_explorer.explore_vendor_site,
         extract_vendor_intelligence_fn=vendor_intel.extract_vendor_intelligence,
+        build_vendor_profile_fn=vendor_profile_builder.build_vendor_profile,
         vendor_intelligence_to_sheet_row_fn=google_sheets.vendor_intelligence_to_sheet_row,
         vendor_exists_fn=vendor_exists_fn,
         upsert_vendor_result_fn=upsert_vendor_result_fn,

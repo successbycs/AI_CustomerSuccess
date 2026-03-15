@@ -6,8 +6,10 @@ import logging
 from typing import Callable
 
 from services.discovery import web_search
+from services.enrichment import site_explorer
 from services.enrichment import vendor_fetcher
 from services.extraction import vendor_intel
+from services.extraction import vendor_profile_builder
 from services.export import google_sheets
 from services.extraction.vendor_intel import VendorIntelligence
 from services.persistence import supabase_client
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 VendorCandidate = dict[str, str]
 HomepagePayload = dict[str, str | int]
+ExploredPages = dict[str, HomepagePayload]
 SheetRow = dict[str, str]
 
 
@@ -24,7 +27,10 @@ def run_mvp_pipeline(
     *,
     search_web_fn: Callable[[str], list[VendorCandidate]] | None = None,
     fetch_vendor_homepage_fn: Callable[[VendorCandidate], HomepagePayload] | None = None,
-    extract_vendor_intelligence_fn: Callable[[HomepagePayload], VendorIntelligence] | None = None,
+    explore_vendor_site_fn: Callable[[HomepagePayload], ExploredPages] | None = None,
+    extract_vendor_intelligence_fn: Callable[[dict[str, object]], VendorIntelligence] | None = None,
+    build_vendor_profile_fn: Callable[[VendorCandidate, ExploredPages, VendorIntelligence], VendorIntelligence]
+    | None = None,
     vendor_intelligence_to_sheet_row_fn: Callable[[VendorIntelligence], SheetRow] | None = None,
     vendor_exists_fn: Callable[[str], bool] | None = None,
     upsert_vendor_result_fn: Callable[[VendorCandidate, HomepagePayload, VendorIntelligence], object]
@@ -33,9 +39,11 @@ def run_mvp_pipeline(
     """Run the MVP pipeline with optional persistence."""
     search_web_fn = search_web_fn or web_search.search_web
     fetch_vendor_homepage_fn = fetch_vendor_homepage_fn or vendor_fetcher.fetch_vendor_homepage
+    explore_vendor_site_fn = explore_vendor_site_fn or site_explorer.explore_vendor_site
     extract_vendor_intelligence_fn = (
         extract_vendor_intelligence_fn or vendor_intel.extract_vendor_intelligence
     )
+    build_vendor_profile_fn = build_vendor_profile_fn or vendor_profile_builder.build_vendor_profile
     vendor_intelligence_to_sheet_row_fn = (
         vendor_intelligence_to_sheet_row_fn
         or google_sheets.vendor_intelligence_to_sheet_row
@@ -74,11 +82,18 @@ def run_mvp_pipeline(
 
         logger.info("Processing vendor: %s", vendor_name)
         homepage_payload = fetch_vendor_homepage_fn(vendor)
-        intelligence = extract_vendor_intelligence_fn(homepage_payload)
+        try:
+            explored_pages = explore_vendor_site_fn(homepage_payload)
+        except Exception as error:
+            logger.warning("Site exploration failed for %s, using homepage only: %s", vendor_name, error)
+            explored_pages = {"homepage": homepage_payload}
+
+        intelligence = extract_vendor_intelligence_fn(explored_pages)
+        profile = build_vendor_profile_fn(vendor, explored_pages, intelligence)
 
         if upsert_vendor_result_fn:
             try:
-                upsert_vendor_result_fn(vendor, homepage_payload, intelligence)
+                upsert_vendor_result_fn(vendor, homepage_payload, profile)
             except Exception as error:
                 if supabase_client.is_persistence_unavailable_error(error):
                     logger.warning("Persistence unavailable, continuing without upsert: %s", error)
@@ -87,9 +102,7 @@ def run_mvp_pipeline(
                 else:
                     raise
 
-        sheet_row = vendor_intelligence_to_sheet_row_fn(intelligence)
-        if not sheet_row.get("source"):
-            sheet_row["source"] = vendor.get("source", "")
+        sheet_row = vendor_intelligence_to_sheet_row_fn(profile)
         vendor_rows.append(sheet_row)
 
     google_sheets.append_rows_to_google_sheet(vendor_rows)

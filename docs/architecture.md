@@ -46,18 +46,20 @@ source
 
 services/enrichment/
 
-Fetches vendor homepage content using Python requests.
+Fetches vendor homepage content and explores high-signal vendor pages using Python requests.
 
 Responsibilities:
 
 - Fetch homepage HTML
-- Strip HTML tags
-- Extract visible text
-- Normalise whitespace
-- Truncate content to ~5000 characters
-- Return clean text ready for extraction
+- Explore up to 5 high-signal pages per vendor
+- Skip unreachable pages safely
+- Return structured page payloads ready for extraction
 
 Apify is not used for enrichment.
+
+site_explorer.py
+
+Discovers high-signal vendor pages such as pricing, product, case studies, about, and security.
 
 ---
 
@@ -65,17 +67,33 @@ services/extraction/
 
 Currently implements the deterministic extraction layer.
 
+page_text_extractor.py
+
+Extracts clean visible text from HTML while removing scripts, navigation blocks, and footer noise.
+
 vendor_intel.py
 
-Level 1 deterministic extraction using rule-based keyword detection. Extracts baseline signals such as:
+Level 1 deterministic extraction using rule-based keyword detection across homepage and explored pages. Extracts structured vendor signals such as:
 
+mission  
+usp  
+icp  
 use_cases  
+pricing  
+free_trial  
+soc2  
+founded  
+case_studies  
+customers  
 value_statements  
-product_capabilities  
 lifecycle_stages  
 confidence  
 
 This extractor guarantees structured output even if LLM extraction fails.
+
+vendor_profile_builder.py
+
+Merges discovery metadata, explored pages, and extracted intelligence into a single `VendorIntelligence` record ready for export.
 
 llm_extractor.py (planned)
 
@@ -168,6 +186,25 @@ google_sheets.py
 
 Appends new vendor rows to the Google Sheet used for browsing the vendor landscape.
 
+Current export columns:
+
+vendor_name  
+website  
+mission  
+usp  
+icp  
+use_cases  
+lifecycle_stages  
+pricing  
+free_trial  
+soc2  
+founded  
+case_studies  
+customers  
+value_statements  
+confidence  
+evidence_urls  
+
 slack.py
 
 Builds and posts the weekly Slack digest summarising vendors discovered in the past week grouped by lifecycle stage.
@@ -185,7 +222,10 @@ candidate normalisation
 domain deduplication  
 Supabase deduplication check  
 homepage enrichment  
+website exploration  
+page text extraction  
 deterministic extraction  
+vendor profile building  
 lifecycle classification  
 persistence  
 Google Sheets export
@@ -259,21 +299,23 @@ python -m services.pipeline.scheduler --run-now digest
 
 5. Each new vendor homepage is fetched via `fetch_vendor_homepage()`.
 
-6. Deterministic extraction runs via `rule_extractor`.
+6. Site exploration discovers up to 5 high-signal pages for each vendor.
 
-7. LLM extraction runs via `llm_extractor` using a ChatGPT model.
+7. Clean visible text is extracted from homepage and explored pages.
 
-8. Extraction results are merged into a `VendorIntelligence` object.
+8. Deterministic extraction runs via `vendor_intel.py`.
 
-9. Lifecycle stages are assigned using `lifecycle_classifier`.
+9. The extracted signals are merged into one `VendorIntelligence` profile.
 
-10. Each vendor object is persisted via `upsert_vendor()`.
+10. Lifecycle stages are assigned deterministically inside the extraction layer.
 
-11. Each vendor row is appended to Google Sheets.
+11. Each vendor object is persisted via `upsert_vendor()`.
 
-12. On Monday at 08:00 UTC, `run_digest()` queries vendors added in the past week and posts a Slack digest grouped by lifecycle stage.
+12. Each vendor row is appended to Google Sheets.
 
-13. Vendors included in the digest have `is_new = FALSE`.
+13. On Monday at 08:00 UTC, `run_digest()` queries vendors added in the past week and posts a Slack digest grouped by lifecycle stage.
+
+14. Vendors included in the digest have `is_new = FALSE`.
 
 ---
 
@@ -355,7 +397,6 @@ All services have corresponding test files in `tests/`.
 External services are mocked:
 
 Apify  
-OpenAI  
 Supabase  
 Google Sheets  
 Slack
@@ -371,12 +412,13 @@ python3 -m venv .venv
 Test files:
 
 tests/test_discovery.py  
-tests/test_enrichment.py  
-tests/test_extraction.py  
-tests/test_classification.py  
-tests/test_persistence.py  
-tests/test_export.py  
-tests/test_pipeline.py
+tests/test_vendor_fetcher.py  
+tests/test_site_explorer.py  
+tests/test_vendor_intel_extraction.py  
+tests/test_vendor_profile_builder.py  
+tests/test_supabase_client.py  
+tests/test_google_sheets.py  
+tests/test_mvp_pipeline.py
 
 ---
 
@@ -388,10 +430,10 @@ Apify is used for discovery crawling only.
 
 Homepage enrichment uses Python requests.
 
-Extraction uses two independent systems:
+Extraction is currently deterministic-first:
 
 Level 1 deterministic rules  
-Level 2 ChatGPT semantic extraction
+Level 2 ChatGPT semantic extraction (planned)
 
 Lifecycle classification is deterministic and handled by Python.
 

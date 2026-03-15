@@ -155,6 +155,34 @@ VALUE_STATEMENT_RULES = [
     (["nps", "voice of customer", "voc", "reference management", "case study", "case studies"], "strengthen customer advocacy"),
 ]
 
+ICP_RULES = [
+    (["for saas companies", "saas companies", "for modern saas teams"], "SaaS companies"),
+    (["for b2b startups", "b2b startups", "for b2b software teams"], "B2B startups"),
+    (["for product-led teams", "product-led teams", "for product led teams", "product led teams"], "product-led teams"),
+    (["for customer success teams", "customer success teams", "built for customer success teams"], "customer success teams"),
+    (["for support teams", "support teams", "built for support teams"], "support teams"),
+    (["for revenue teams", "revenue teams", "for revenue operations teams"], "revenue teams"),
+]
+
+PRICING_RULES = [
+    (["per seat"], "per seat"),
+    (["per user"], "per user"),
+    (["per month", "/month", "monthly"], "per month"),
+    (["per year", "/year", "annually"], "per year"),
+    (["contact sales", "custom pricing"], "contact sales"),
+]
+
+CASE_STUDY_RULES = [
+    (["case study", "case studies"], "case study"),
+    (["customer story", "customer stories"], "customer story"),
+]
+
+CUSTOMER_PATTERNS = [
+    r"trusted by ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
+    r"customers include ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
+    r"how ([A-Z][A-Za-z0-9&.-]+) uses",
+]
+
 
 @dataclass
 class VendorIntelligence:
@@ -164,13 +192,15 @@ class VendorIntelligence:
     mission: str = ""
     usp: str = ""
     icp: list[str] = field(default_factory=list)
+    use_cases: list[str] = field(default_factory=list)
     lifecycle_stages: list[str] = field(default_factory=list)
-    case_studies: list[str] = field(default_factory=list)
-    value_statements: list[str] = field(default_factory=list)
     pricing: list[str] = field(default_factory=list)
     free_trial: bool | None = None
     soc2: bool | None = None
     founded: str = ""
+    case_studies: list[str] = field(default_factory=list)
+    customers: list[str] = field(default_factory=list)
+    value_statements: list[str] = field(default_factory=list)
     confidence: str = ""
     evidence_urls: list[str] = field(default_factory=list)
 
@@ -191,10 +221,12 @@ class VendorIntelligence:
 
         for field_name in [
             "icp",
+            "use_cases",
             "lifecycle_stages",
-            "case_studies",
-            "value_statements",
             "pricing",
+            "case_studies",
+            "customers",
+            "value_statements",
             "evidence_urls",
         ]:
             value = getattr(self, field_name)
@@ -210,32 +242,58 @@ class VendorIntelligence:
 
 
 def extract_vendor_intelligence(
-    homepage_payload: dict[str, str | int],
+    page_payload: dict[str, object],
 ) -> VendorIntelligence:
-    """Convert a homepage payload into a VendorIntelligence object.
+    """Convert explored vendor page payloads into a VendorIntelligence object.
 
-    This MVP implementation uses simple rule-based keyword matching on
-    homepage text to populate a few useful fields deterministically.
+    This implementation uses simple rule-based keyword matching on
+    homepage and high-signal vendor pages to populate directory fields.
     """
-    raw_text = str(homepage_payload.get("text", "")).strip()
-    text = raw_text.lower()
-    use_cases = _extract_use_cases(text)
-    lifecycle_stages = _extract_lifecycle_stages(text)
-    value_statements = _extract_value_statements(text)
+    page_payloads = _coerce_page_payloads(page_payload)
+    homepage_payload = page_payloads.get("homepage", {})
+    homepage_text = str(homepage_payload.get("text", "")).strip()
+    combined_text = _combine_page_texts(page_payloads)
+    combined_text_lower = combined_text.lower()
+    pricing_text = _page_text(page_payloads, "pricing_page").lower()
+    case_studies_text = _page_text(page_payloads, "case_studies_page").lower()
+    security_text = _page_text(page_payloads, "security_page").lower()
+    all_evidence_urls = _collect_page_urls(page_payloads)
+
+    icp = _extract_icp(combined_text_lower)
+    use_cases = _extract_use_cases(combined_text_lower)
+    lifecycle_stages = _extract_lifecycle_stages(combined_text_lower)
+    value_statements = _extract_value_statements(combined_text_lower)
+    case_studies = _extract_case_studies(case_studies_text or combined_text_lower)
+    customers = _extract_customers(combined_text)
+    pricing = _extract_pricing(pricing_text or combined_text_lower)
+    free_trial = _detect_boolean_signal(combined_text_lower, ["free trial", "start free", "try free"])
+    soc2 = _detect_boolean_signal(security_text or combined_text_lower, ["soc 2", "soc2", "iso 27001", "iso27001"])
 
     return VendorIntelligence(
-        vendor_name=str(homepage_payload["vendor_name"]),
-        website=str(homepage_payload["website"]),
+        vendor_name=str(homepage_payload.get("vendor_name", "")),
+        website=str(homepage_payload.get("website", "")),
         source=str(homepage_payload.get("source", "")),
-        mission=_extract_mission(raw_text),
+        mission=_extract_mission(homepage_text or combined_text),
         usp=value_statements[0] if value_statements else "",
-        icp=use_cases,
+        icp=icp,
+        use_cases=use_cases,
         lifecycle_stages=lifecycle_stages,
+        pricing=pricing,
+        free_trial=free_trial,
+        soc2=soc2,
+        founded=_extract_founded(combined_text),
+        case_studies=case_studies,
+        customers=customers,
         value_statements=value_statements,
-        free_trial=_detect_boolean_signal(text, ["free trial"]),
-        soc2=_detect_boolean_signal(text, ["soc 2", "soc2"]),
-        founded=_extract_founded(raw_text),
-        confidence=_determine_confidence(use_cases, lifecycle_stages, value_statements),
+        confidence=_determine_confidence(
+            icp=icp,
+            use_cases=use_cases,
+            lifecycle_stages=lifecycle_stages,
+            value_statements=value_statements,
+            case_studies=case_studies,
+            pricing=pricing,
+        ),
+        evidence_urls=all_evidence_urls,
     )
 
 
@@ -261,6 +319,17 @@ def _extract_use_cases(text: str) -> list[str]:
     return use_cases
 
 
+def _extract_icp(text: str) -> list[str]:
+    """Return simple ICP labels detected from vendor text."""
+    icp: list[str] = []
+
+    for keywords, label in ICP_RULES:
+        if _contains_any(text, keywords) and label not in icp:
+            icp.append(label)
+
+    return icp
+
+
 def _extract_value_statements(text: str) -> list[str]:
     """Return value statements detected from homepage text."""
     value_statements: list[str] = []
@@ -270,6 +339,51 @@ def _extract_value_statements(text: str) -> list[str]:
             value_statements.append(label)
 
     return value_statements
+
+
+def _extract_pricing(text: str) -> list[str]:
+    """Return simple pricing signals from vendor text."""
+    pricing: list[str] = []
+
+    if "$" in text and "$" not in pricing:
+        pricing.append("$")
+
+    for keywords, label in PRICING_RULES:
+        if _contains_any(text, keywords) and label not in pricing:
+            pricing.append(label)
+
+    return pricing
+
+
+def _extract_case_studies(text: str) -> list[str]:
+    """Return case-study style proof signals from vendor text."""
+    case_studies: list[str] = []
+
+    for keywords, label in CASE_STUDY_RULES:
+        if _contains_any(text, keywords) and label not in case_studies:
+            case_studies.append(label)
+
+    if re.search(r"how [a-z0-9&.-]+ uses", text) and "how customers use the product" not in case_studies:
+        case_studies.append("how customers use the product")
+
+    return case_studies
+
+
+def _extract_customers(text: str) -> list[str]:
+    """Return simple named-customer signals from vendor text."""
+    customers: list[str] = []
+
+    for pattern in CUSTOMER_PATTERNS:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+
+        for customer_name in match.group(1).split(","):
+            cleaned_name = customer_name.strip().strip(".")
+            if cleaned_name and cleaned_name not in customers:
+                customers.append(cleaned_name)
+
+    return customers
 
 
 def _contains_any(text: str, keywords: list[str]) -> bool:
@@ -308,14 +422,62 @@ def _detect_boolean_signal(text: str, keywords: list[str]) -> bool | None:
 
 
 def _determine_confidence(
+    *,
+    icp: list[str],
     use_cases: list[str],
     lifecycle_stages: list[str],
     value_statements: list[str],
+    case_studies: list[str],
+    pricing: list[str],
 ) -> str:
     """Return a simple deterministic confidence label."""
-    signal_score = (len(lifecycle_stages) * 2) + len(use_cases) + len(value_statements)
-    if signal_score >= 10:
+    signal_score = (
+        (len(lifecycle_stages) * 2)
+        + len(use_cases)
+        + len(icp)
+        + len(value_statements)
+        + len(case_studies)
+        + len(pricing)
+    )
+    if signal_score >= 12:
         return "high"
     if signal_score >= 4:
         return "medium"
     return "low"
+
+
+def _coerce_page_payloads(page_payload: dict[str, object]) -> dict[str, dict[str, str | int]]:
+    """Accept either a single homepage payload or explored page payloads."""
+    if "homepage" in page_payload and isinstance(page_payload["homepage"], dict):
+        return {
+            page_name: page_value
+            for page_name, page_value in page_payload.items()
+            if isinstance(page_value, dict)
+        }
+
+    return {"homepage": page_payload}  # type: ignore[return-value]
+
+
+def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
+    """Return the combined text from explored vendor pages."""
+    texts: list[str] = []
+    for page_key in ["homepage", "product_page", "pricing_page", "case_studies_page", "about_page", "security_page"]:
+        page_text = _page_text(page_payloads, page_key)
+        if page_text:
+            texts.append(page_text)
+    return " ".join(texts).strip()
+
+
+def _page_text(page_payloads: dict[str, dict[str, str | int]], page_key: str) -> str:
+    page_payload = page_payloads.get(page_key, {})
+    return str(page_payload.get("text", "")).strip()
+
+
+def _collect_page_urls(page_payloads: dict[str, dict[str, str | int]]) -> list[str]:
+    """Return URLs used as evidence for extracted signals."""
+    evidence_urls: list[str] = []
+    for page_payload in page_payloads.values():
+        page_url = str(page_payload.get("website", "")).strip()
+        if page_url and page_url not in evidence_urls:
+            evidence_urls.append(page_url)
+    return evidence_urls
