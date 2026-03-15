@@ -57,16 +57,33 @@ def run_mvp_pipeline(
         website = vendor["website"]
         vendor_name = vendor["vendor_name"]
 
-        if vendor_exists_fn and vendor_exists_fn(website):
-            logger.info("Skipping existing vendor: %s", vendor_name)
-            continue
+        if vendor_exists_fn:
+            try:
+                if vendor_exists_fn(website):
+                    logger.info("Skipping existing vendor: %s", vendor_name)
+                    continue
+            except Exception as error:
+                if supabase_client.is_persistence_unavailable_error(error):
+                    logger.warning("Persistence unavailable, continuing without deduplication: %s", error)
+                    vendor_exists_fn = None
+                    upsert_vendor_result_fn = None
+                else:
+                    raise
 
         logger.info("Processing vendor: %s", vendor_name)
         homepage_payload = fetch_vendor_homepage_fn(vendor)
         intelligence = extract_vendor_intelligence_fn(homepage_payload)
 
         if upsert_vendor_result_fn:
-            upsert_vendor_result_fn(vendor, homepage_payload, intelligence)
+            try:
+                upsert_vendor_result_fn(vendor, homepage_payload, intelligence)
+            except Exception as error:
+                if supabase_client.is_persistence_unavailable_error(error):
+                    logger.warning("Persistence unavailable, continuing without upsert: %s", error)
+                    upsert_vendor_result_fn = None
+                    vendor_exists_fn = None
+                else:
+                    raise
 
         sheet_row = vendor_intelligence_to_sheet_row_fn(intelligence)
         vendor_rows.append(sheet_row)

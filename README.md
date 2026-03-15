@@ -13,6 +13,8 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
+The CLI loads environment variables from a local `.env` file automatically.
+
 ## Run Tests
 
 Use the local virtual environment for deterministic test runs:

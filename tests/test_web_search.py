@@ -34,12 +34,14 @@ def test_search_web_calls_apify_google_search_and_returns_vendor_records(monkeyp
     assert called["queries"] == ["customer success case studies"]
     expected = [
         {
+            "company_name": "Gainsight",
             "vendor_name": "Gainsight",
             "website": "https://gainsight.com",
             "source": "google_search",
             "raw_description": "Customer success platform",
         },
         {
+            "company_name": "Vitally",
             "vendor_name": "Vitally",
             "website": "https://vitally.io",
             "source": "google_search",

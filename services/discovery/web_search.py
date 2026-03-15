@@ -10,6 +10,7 @@ def search_web(query: str) -> list[dict[str, str]]:
     candidates = apify_sources.fetch_google_search([query])
     return [
         {
+            "company_name": candidate["company_name"],
             "vendor_name": candidate["company_name"],
             "website": candidate["website"],
             "source": candidate["source"],

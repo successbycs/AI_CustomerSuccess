@@ -53,21 +53,38 @@ def _normalize_google_search_items(
     candidates: list[dict[str, str]] = []
 
     for item in items:
-        website = _normalize_website(item.get("url"))
-        if not website:
+        organic_results = item.get("organicResults")
+        if isinstance(organic_results, list) and organic_results:
+            for organic_result in organic_results:
+                if not isinstance(organic_result, dict):
+                    continue
+                candidate = _normalize_google_search_result(organic_result)
+                if candidate:
+                    candidates.append(candidate)
             continue
 
-        company_name = _clean_text(item.get("title")) or _company_name_from_website(website)
-        candidates.append(
-            {
-                "company_name": company_name,
-                "website": website,
-                "raw_description": _clean_text(item.get("description")),
-                "source": "google_search",
-            }
-        )
+        candidate = _normalize_google_search_result(item)
+        if candidate:
+            candidates.append(candidate)
 
     return candidates
+
+
+def _normalize_google_search_result(
+    item: dict[str, object],
+) -> dict[str, str] | None:
+    """Normalize one Google Search result into a vendor candidate."""
+    website = _normalize_website(item.get("url"))
+    if not website:
+        return None
+
+    company_name = _clean_text(item.get("title")) or _company_name_from_website(website)
+    return {
+        "company_name": company_name,
+        "website": website,
+        "raw_description": _clean_text(item.get("description")),
+        "source": "google_search",
+    }
 
 
 def _deduplicate_candidates_by_domain(

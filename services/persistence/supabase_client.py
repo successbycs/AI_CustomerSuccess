@@ -56,6 +56,22 @@ def upsert_vendor_result(
     return row
 
 
+def is_persistence_unavailable_error(error: Exception) -> bool:
+    """Return True for missing-table or unavailable persistence errors."""
+    error_code = getattr(error, "code", "")
+    error_message = str(error).lower()
+
+    if error_code == "PGRST205":
+        return True
+
+    return all(marker in error_message for marker in ["cs_vendors", "does not exist"]) or any(
+        marker in error_message for marker in [
+            "could not find the table",
+            "public.cs_vendors",
+        ]
+    )
+
+
 def build_vendor_row(
     vendor: dict[str, str],
     homepage_payload: dict[str, str | int],

@@ -8,6 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -16,6 +18,11 @@ from services.pipeline.run_mvp_pipeline import run_mvp_pipeline
 from services.export.google_sheets import write_rows_to_csv
 
 DEFAULT_CSV_OUTPUT = PROJECT_ROOT / "outputs" / "vendor_rows.csv"
+
+
+def load_environment() -> None:
+    """Load environment variables from the local .env file."""
+    load_dotenv(PROJECT_ROOT / ".env")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     """Run the CLI entrypoint."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    load_environment()
     args = build_parser().parse_args()
     rows = run_mvp_pipeline(args.query)
     csv_path = Path(args.csv_out)
