@@ -1,56 +1,19 @@
-"""Web search discovery service.
-
-This module provides a minimal search interface for discovering candidate vendor records.
-
-The actual search API implementation is a placeholder and should be replaced with a real
-integration (e.g., Google Search API, Bing Search API, etc.) in an MVP build.
-"""
+"""Compatibility wrapper around the Apify-based discovery layer."""
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+from services.discovery import apify_sources
 
 
 def search_web(query: str) -> list[dict[str, str]]:
-    """Return a list of candidate vendor records for the given query.
-
-    Args:
-        query: The search query string.
-
-    Returns:
-        A list of vendor candidate dictionaries.
-    """
-
-    # TODO: Replace this placeholder implementation with a real search API call.
-    urls = _call_search_api(query)
-    return _normalize_urls_to_vendors(urls)
-
-
-def _call_search_api(query: str) -> list[str]:
-    """Placeholder for search API integration.
-
-    This function is intentionally simplistic so it can be mocked in tests.
-    """
-
-    del query  # placeholder
-
-    # In the MVP, this would call an external API and return URLs.
-    return ["https://gainsight.com", "https://vitally.io"]
-
-
-def _normalize_urls_to_vendors(urls: list[str]) -> list[dict[str, str]]:
-    """Convert URLs to normalized vendor candidate dictionaries."""
-    vendors = []
-    for url in urls:
-        parsed = urlparse(url)
-        domain = parsed.netloc
-        if domain.startswith("www."):
-            domain = domain[4:]
-        vendor_name = domain.split('.')[0].capitalize()
-        website = f"https://{domain}"
-        vendors.append({
-            "vendor_name": vendor_name,
-            "website": website,
-            "source": "web_search"
-        })
-    return vendors
+    """Return vendor candidates using Apify Google Search."""
+    candidates = apify_sources.fetch_google_search([query])
+    return [
+        {
+            "vendor_name": candidate["company_name"],
+            "website": candidate["website"],
+            "source": candidate["source"],
+            "raw_description": candidate.get("raw_description", ""),
+        }
+        for candidate in candidates
+    ]

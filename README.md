@@ -21,6 +21,14 @@ Use the local virtual environment for deterministic test runs:
 .venv/bin/python -m pytest
 ```
 
+## Run the Pipeline
+
+Write Google Sheets-ready CSV output to `outputs/vendor_rows.csv`:
+
+```sh
+.venv/bin/python scripts/run_pipeline.py "ai customer success platform"
+```
+
 ## MVP Flow
 
 The current codebase follows the MVP pipeline described in `docs/product_design.md`:

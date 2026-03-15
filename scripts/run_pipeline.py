@@ -13,6 +13,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from services.pipeline.run_mvp_pipeline import run_mvp_pipeline
+from services.export.google_sheets import write_rows_to_csv
+
+DEFAULT_CSV_OUTPUT = PROJECT_ROOT / "outputs" / "vendor_rows.csv"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Pretty-print the JSON output",
     )
+    parser.add_argument(
+        "--csv-out",
+        default=str(DEFAULT_CSV_OUTPUT),
+        help="CSV output path for Google Sheets-ready vendor rows",
+    )
     return parser
 
 
@@ -34,6 +42,10 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = build_parser().parse_args()
     rows = run_mvp_pipeline(args.query)
+    csv_path = Path(args.csv_out)
+
+    write_rows_to_csv(rows, csv_path)
+    logging.info("Wrote %s vendor rows to %s", len(rows), csv_path)
 
     if args.pretty:
         print(json.dumps(rows, indent=2))
