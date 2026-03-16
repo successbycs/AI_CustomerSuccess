@@ -191,6 +191,31 @@ def test_extract_vendor_intelligence_detects_icp_pricing_soc2_and_case_study_sig
     assert result.case_studies == ["case study", "customer story"]
 
 
+def test_extract_vendor_intelligence_uses_extra_pages_in_combined_text():
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "SignalsAI",
+            "website": "https://signals.example.com",
+            "text": "Built for customer success teams.",
+        },
+        "extra_pages": [
+            {
+                "website": "https://signals.example.com/ai-copilot",
+                "url": "https://signals.example.com/ai-copilot",
+                "text": "AI copilot supports onboarding automation and health scoring.",
+            }
+        ],
+    }
+
+    result = extract_vendor_intelligence(explored_pages)
+
+    assert result.use_cases == ["onboarding", "health scoring"]
+    assert result.evidence_urls == [
+        "https://signals.example.com",
+        "https://signals.example.com/ai-copilot",
+    ]
+
+
 def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
     homepage_payload = {
         "vendor_name": "LifecycleAI",

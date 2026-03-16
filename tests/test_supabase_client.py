@@ -86,6 +86,7 @@ def test_upsert_vendor_result_uses_website_conflict_key():
         vendor_name="ExampleCorp",
         website="https://example.com",
         icp=["churn", "health"],
+        use_cases=["health scoring", "churn prevention"],
         lifecycle_stages=["Adopt", "Renew"],
         value_statements=["reduce churn"],
     )
@@ -108,7 +109,7 @@ def test_upsert_vendor_result_uses_website_conflict_key():
     assert row["usp"] == "reduce churn"
     assert row["free_trial"] is True
     assert row["soc2"] is True
-    assert row["use_cases"] == ["churn", "health"]
+    assert row["use_cases"] == ["health scoring", "churn prevention"]
     assert row["lifecycle_stages"] == ["Adopt", "Renew"]
     assert row["raw_description"] == (
         "Reduce churn with customer health visibility. Free trial available. SOC 2 compliant."

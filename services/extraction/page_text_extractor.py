@@ -14,7 +14,6 @@ SKIP_TAGS = {
     "nav",
     "footer",
     "aside",
-    "header",
     "form",
     "iframe",
     "template",
@@ -25,6 +24,7 @@ NOISE_HINTS = (
     "analytics",
     "banner",
     "breadcrumb",
+    "consent",
     "cookie",
     "footer",
     "menu",
@@ -141,7 +141,7 @@ class _VisibleTextParser(HTMLParser):
         return any(noise_hint in attr_values for noise_hint in NOISE_HINTS)
 
 
-def extract_visible_text(html_content: str) -> str:
+def extract_visible_text(html_content: str, *, max_chars: int | None = None) -> str:
     """Return cleaned visible text from HTML for deterministic extraction."""
     if not html_content:
         return ""
@@ -149,4 +149,7 @@ def extract_visible_text(html_content: str) -> str:
     parser = _VisibleTextParser()
     parser.feed(html_content)
     parser.close()
-    return parser.get_text()
+    extracted_text = parser.get_text()
+    if max_chars is None or max_chars <= 0:
+        return extracted_text
+    return extracted_text[:max_chars].strip()

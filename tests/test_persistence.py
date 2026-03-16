@@ -1,6 +1,7 @@
 """Tests for Supabase configuration and client setup."""
 
 from services.persistence import supabase_client
+from services.extraction.vendor_intel import VendorIntelligence
 
 
 def test_get_supabase_config_returns_none_when_url_is_missing(monkeypatch):
@@ -54,3 +55,35 @@ def test_get_supabase_client_raises_clean_error_when_config_is_missing(monkeypat
         assert str(error) == "SUPABASE_URL and SUPABASE_KEY must be set"
     else:
         raise AssertionError("Expected RuntimeError when Supabase config is missing")
+
+
+def test_build_vendor_row_uses_extracted_vendor_fields():
+    row = supabase_client.build_vendor_row(
+        vendor={"source": "web_search", "raw_description": "Raw vendor description"},
+        homepage_payload={"text": "Homepage fallback text."},
+        intelligence=VendorIntelligence(
+            vendor_name="ExampleCorp",
+            website="https://example.com",
+            source="web_search",
+            mission="Structured mission",
+            usp="Structured usp",
+            use_cases=["onboarding", "churn prevention"],
+            lifecycle_stages=["Onboard", "Renew"],
+            pricing=["contact sales", "per seat"],
+            free_trial=True,
+            soc2=True,
+            founded="2021",
+        ),
+    )
+
+    assert row["name"] == "ExampleCorp"
+    assert row["website"] == "https://example.com"
+    assert row["source"] == "web_search"
+    assert row["mission"] == "Structured mission"
+    assert row["usp"] == "Structured usp"
+    assert row["pricing"] == "contact sales|per seat"
+    assert row["free_trial"] is True
+    assert row["soc2"] is True
+    assert row["founded"] == "2021"
+    assert row["use_cases"] == ["onboarding", "churn prevention"]
+    assert row["lifecycle_stages"] == ["Onboard", "Renew"]

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from services.config.load_config import load_pipeline_config
 from services.extraction.page_text_extractor import extract_visible_text
 
 BLOCKED_PAGE_HINTS = (
@@ -32,8 +33,9 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     """
     website = vendor["website"]
     vendor_name = _resolve_vendor_name(vendor.get("vendor_name", ""), website, "")
+    request_timeout_seconds = load_pipeline_config().enrichment.request_timeout_seconds
     try:
-        response = requests.get(website, timeout=10)
+        response = requests.get(website, timeout=request_timeout_seconds)
         status_code = response.status_code
         html = response.text
         if _should_skip_page(response.status_code, response.text):
@@ -49,6 +51,7 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     return {
         "vendor_name": vendor_name,
         "website": website,
+        "url": website,
         "source": vendor.get("source", ""),
         "page_type": "homepage",
         "status_code": status_code,

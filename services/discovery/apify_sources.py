@@ -2,169 +2,64 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 import os
 import re
 from urllib.parse import urlparse
 
-from services.discovery.discovery_config import load_google_search_config
+from services.config.load_config import DiscoveryConfig, load_pipeline_config
 
 logger = logging.getLogger(__name__)
-
 GOOGLE_SEARCH_ACTOR = "apify/google-search-scraper"
-DENYLISTED_DOMAINS = {
-    "facebook.com",
-    "gartner.com",
-    "google.com",
-    "instagram.com",
-    "jobs.ca",
-    "linkedin.com",
-    "medium.com",
-    "reddit.com",
-    "substack.com",
-    "slashdot.org",
-    "sourceforge.net",
-    "twitter.com",
-    "toolify.ai",
-    "wikipedia.org",
-    "x.com",
-    "youtube.com",
-}
-ARTICLE_PATH_HINTS = (
-    "/article",
-    "/articles",
-    "/blog",
-    "/blogs",
-    "/community",
-    "/forum",
-    "/forums",
-    "/guide",
-    "/guides",
-    "/learn",
-    "/news",
-    "/resources",
-)
-CONTENT_HINTS = (
-    "best ",
-    "blog",
-    "careers",
-    "case studies",
-    "case study",
-    "community",
-    "compare",
-    "comparison",
-    "forum",
-    "guide",
-    "guides",
-    "how to",
-    "job application",
-    "jobs",
-    "listicle",
-    "newsletter",
-    "reddit",
-    "review",
-    "reviews",
-    "top ",
-    "vs ",
-)
-PRODUCT_HINTS = (
-    "automation",
-    "copilot",
-    "platform",
-    "software",
-    "solution",
-    "solutions",
-    "tool",
-    "tools",
-    "workspace",
-)
-CUSTOMER_SUCCESS_HINTS = (
-    "adoption nudge",
-    "adoption nudges",
-    "case study",
-    "case studies",
-    "churn",
-    "conversational intelligence",
-    "cross-sell",
-    "customer health",
-    "customer onboarding",
-    "customer success",
-    "expansion revenue",
-    "forecasting",
-    "handoff",
-    "health score",
-    "implementation portal",
-    "implementation portals",
-    "in-app guidance",
-    "meeting summaries",
-    "meeting summary",
-    "nps",
-    "onboarding automation",
-    "playbook",
-    "product walkthrough",
-    "product walkthroughs",
-    "psa",
-    "reference management",
-    "renewal",
-    "retention",
-    "risk alert",
-    "risk alerts",
-    "sales-to-cs",
-    "support automation",
-    "support platform",
-    "ticket triage",
-    "help desk",
-    "agent assist",
-    "knowledge base",
-    "sentiment analysis",
-    "stakeholder mapping",
-    "time to value",
-    "upsell",
-    "usage analytics",
-    "user education",
-    "voice of customer",
-    "voc",
-)
-NOISE_SUBDOMAIN_PREFIXES = (
-    "blog.",
-    "careers.",
-    "community.",
-    "jobs.",
-    "newsletter.",
-)
-NOISE_DOMAIN_HINTS = (
-    "greenhouse",
-    "myworkdayjobs",
-)
-JOB_PATH_HINTS = (
-    "/career",
-    "/careers",
-    "/job",
-    "/jobs",
-)
-INTERSTITIAL_HINTS = (
-    "403 forbidden",
-    "access denied",
-    "just a moment",
-)
 
 
 def fetch_google_search(queries: list[str]) -> list[dict[str, str]]:
     """Fetch and normalize vendor candidates from Apify Google Search."""
+    candidate_records = fetch_google_search_candidate_records(queries)
+    unique_candidates: list[dict[str, str]] = []
+    seen_domains: set[str] = set()
+
+    for record in candidate_records:
+        candidate_domain = str(record.get("candidate_domain", "")).strip()
+        if not candidate_domain or candidate_domain in seen_domains:
+            continue
+
+        seen_domains.add(candidate_domain)
+        unique_candidates.append(
+            {
+                "company_name": str(record.get("company_name", "")),
+                "website": str(record.get("website", "")),
+                "raw_description": str(record.get("raw_description", "")),
+                "source": str(record.get("source", "")),
+            }
+        )
+
+    logger.info(
+        "Google Search deduplicated %s candidate records down to %s unique domains",
+        len(candidate_records),
+        len(unique_candidates),
+    )
+    return unique_candidates
+
+
+def fetch_google_search_candidate_records(queries: list[str]) -> list[dict[str, object]]:
+    """Fetch structured candidate records from Apify Google Search."""
     if not queries:
         return []
 
     client = get_apify_client()
-    google_search_config = load_google_search_config()
-    candidates: list[dict[str, str]] = []
+    google_search_config = load_pipeline_config().discovery
+    candidate_records: list[dict[str, object]] = []
     logger.info(
-        "Using Google Search config: max_pages_per_query=%s, results_per_page=%s",
+        "Using Google Search config: actor_id=%s, max_pages_per_query=%s, results_per_page=%s",
+        google_search_config.actor_id,
         google_search_config.max_pages_per_query,
         google_search_config.results_per_page,
     )
 
     for query in queries:
-        run = client.actor(GOOGLE_SEARCH_ACTOR).call(
+        run = client.actor(google_search_config.actor_id).call(
             run_input={
                 "queries": query,
                 "maxPagesPerQuery": google_search_config.max_pages_per_query,
@@ -173,22 +68,17 @@ def fetch_google_search(queries: list[str]) -> list[dict[str, str]]:
         )
         items = client.dataset(run["defaultDatasetId"]).list_items().items
         raw_results = _extract_google_search_results(items)
-        query_candidates = _normalize_google_search_results(raw_results)
+        query_candidates = _normalize_google_search_results(raw_results, google_search_config)
+        query_candidate_records = _build_candidate_records(query, query_candidates)
         logger.info(
             'Google Search query "%s" returned %s raw results and %s filtered candidates',
             query,
             len(raw_results),
             len(query_candidates),
         )
-        candidates.extend(query_candidates)
+        candidate_records.extend(query_candidate_records)
 
-    unique_candidates = _deduplicate_candidates_by_domain(candidates)
-    logger.info(
-        "Google Search deduplicated %s filtered candidates down to %s unique domains",
-        len(candidates),
-        len(unique_candidates),
-    )
-    return unique_candidates
+    return candidate_records
 
 
 def discover_vendor_candidates(query: str) -> list[dict[str, str]]:
@@ -228,12 +118,13 @@ def _extract_google_search_results(
 
 def _normalize_google_search_results(
     items: list[dict[str, object]],
+    config: DiscoveryConfig,
 ) -> list[dict[str, str]]:
     """Normalize raw Google Search results into vendor candidates."""
     candidates: list[dict[str, str]] = []
 
     for item in items:
-        candidate = _normalize_google_search_result(item)
+        candidate = _normalize_google_search_result(item, config)
         if candidate:
             candidates.append(candidate)
 
@@ -242,10 +133,11 @@ def _normalize_google_search_results(
 
 def _normalize_google_search_result(
     item: dict[str, object],
+    config: DiscoveryConfig,
 ) -> dict[str, str] | None:
     """Normalize one Google Search result into a vendor candidate."""
     raw_url = _clean_text(item.get("url"))
-    if not _should_keep_google_search_result(raw_url, item):
+    if not _should_keep_google_search_result(raw_url, item, config):
         return None
 
     website = _normalize_website(raw_url)
@@ -256,6 +148,7 @@ def _normalize_google_search_result(
         title=_clean_text(item.get("title")),
         raw_url=raw_url,
         website=website,
+        config=config,
     )
     return {
         "company_name": company_name,
@@ -287,6 +180,40 @@ def _deduplicate_candidates_by_domain(
         unique_candidates.append(normalized_candidate)
 
     return unique_candidates
+
+
+def _build_candidate_records(
+    query: str,
+    candidates: list[dict[str, str]],
+) -> list[dict[str, object]]:
+    """Return candidate records with discovery metadata for one query."""
+    discovered_at = datetime.now(timezone.utc).isoformat()
+    source_engine = load_pipeline_config().discovery.source_engine
+    candidate_records: list[dict[str, object]] = []
+
+    for source_rank, candidate in enumerate(candidates, start=1):
+        candidate_domain = _domain_from_website(candidate["website"])
+        candidate_records.append(
+            {
+                "candidate_domain": candidate_domain,
+                "candidate_title": candidate["company_name"],
+                "candidate_description": candidate.get("raw_description", ""),
+                "source_query": query,
+                "source_rank": source_rank,
+                "discovered_at": discovered_at,
+                "candidate_status": "new",
+                "status": "new",
+                "company_name": candidate["company_name"],
+                "website": candidate["website"],
+                "raw_description": candidate.get("raw_description", ""),
+                "source": candidate.get("source", "google_search"),
+                "source_engine": source_engine,
+                "discovery_notes": "",
+                "drop_reason": "",
+            }
+        )
+
+    return candidate_records
 
 
 def _normalize_website(value: object) -> str:
@@ -322,14 +249,16 @@ def _company_name_from_website(website: str) -> str:
     return domain.split(".")[0].replace("-", " ").title()
 
 
-def _select_company_name(title: str, raw_url: str, website: str) -> str:
+def _select_company_name(title: str, raw_url: str, website: str, config: DiscoveryConfig) -> str:
     """Prefer the domain name when the result title looks like article content."""
     if not title:
         return _company_name_from_website(website)
 
     parsed = urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
-    if _has_article_like_path(parsed.path.lower()) or _looks_like_generic_content(title.lower()) or _looks_like_listicle_title(
-        title.lower()
+    if (
+        _has_article_like_path(parsed.path.lower(), config)
+        or _looks_like_generic_content(title.lower(), config)
+        or _looks_like_listicle_title(title.lower())
     ):
         return _company_name_from_website(website)
 
@@ -343,7 +272,11 @@ def _clean_text(value: object) -> str:
     return str(value).strip()
 
 
-def _should_keep_google_search_result(raw_url: str, item: dict[str, object]) -> bool:
+def _should_keep_google_search_result(
+    raw_url: str,
+    item: dict[str, object],
+    config: DiscoveryConfig,
+) -> bool:
     """Return True when a search result looks like a vendor candidate."""
     if not raw_url:
         return False
@@ -352,65 +285,67 @@ def _should_keep_google_search_result(raw_url: str, item: dict[str, object]) -> 
     domain = parsed.netloc.lower().strip()
     if domain.startswith("www."):
         domain = domain[4:]
-    if not domain or _is_denylisted_domain(domain):
+    if not domain or _is_denylisted_domain(domain, config):
         return False
-    if _has_noise_subdomain(domain):
+    if _has_noise_subdomain(domain, config):
         return False
-    if _has_noise_domain_hint(domain):
+    if _has_noise_domain_hint(domain, config):
         return False
 
     path = parsed.path.lower()
     title = _clean_text(item.get("title")).lower()
     description = _clean_text(item.get("description")).lower()
     text = f"{title} {description}".strip()
-    if _looks_like_access_interstitial(text):
+    if _looks_like_access_interstitial(text, config):
         return False
-    if _looks_like_job_or_career_content(path, title, description):
+    if _looks_like_job_or_career_content(path, title, description, config):
         return False
-    if not _looks_like_customer_success_result(text):
-        return False
-
-    if _looks_like_listicle_title(title) and not _looks_like_product_description(description):
+    if not _looks_like_customer_success_result(text, config):
         return False
 
-    if _has_article_like_path(path) and _looks_like_generic_content(text) and not _looks_like_product_description(
-        description
+    if _looks_like_listicle_title(title) and not _looks_like_product_description(description, config):
+        return False
+
+    if _has_article_like_path(path, config) and _looks_like_generic_content(
+        text, config
+    ) and not _looks_like_product_description(
+        description, config
     ):
         return False
 
     return True
 
 
-def _is_denylisted_domain(domain: str) -> bool:
+def _is_denylisted_domain(domain: str, config: DiscoveryConfig) -> bool:
     """Return True when the domain is an obvious non-vendor source."""
-    return domain in DENYLISTED_DOMAINS or any(
-        domain.endswith(f".{blocked_domain}") for blocked_domain in DENYLISTED_DOMAINS
+    return domain in config.junk_domain_denylist or any(
+        domain.endswith(f".{blocked_domain}") for blocked_domain in config.junk_domain_denylist
     )
 
 
-def _has_noise_subdomain(domain: str) -> bool:
+def _has_noise_subdomain(domain: str, config: DiscoveryConfig) -> bool:
     """Return True when the domain is an obvious content or jobs subdomain."""
-    return any(domain.startswith(prefix) for prefix in NOISE_SUBDOMAIN_PREFIXES)
+    return any(domain.startswith(prefix) for prefix in config.noise_subdomain_prefixes)
 
 
-def _has_noise_domain_hint(domain: str) -> bool:
+def _has_noise_domain_hint(domain: str, config: DiscoveryConfig) -> bool:
     """Return True when the domain clearly belongs to job or content infrastructure."""
-    return any(hint in domain for hint in NOISE_DOMAIN_HINTS)
+    return any(hint in domain for hint in config.noise_domain_hints)
 
 
-def _has_article_like_path(path: str) -> bool:
+def _has_article_like_path(path: str, config: DiscoveryConfig) -> bool:
     """Return True for paths that look like blogs, articles, or community pages."""
-    return any(hint in path for hint in ARTICLE_PATH_HINTS)
+    return any(hint in path for hint in config.article_path_hints)
 
 
-def _looks_like_generic_content(text: str) -> bool:
+def _looks_like_generic_content(text: str, config: DiscoveryConfig) -> bool:
     """Return True for titles and descriptions that read like content pages."""
-    return any(hint in text for hint in CONTENT_HINTS)
+    return any(hint in text for hint in config.content_hints)
 
 
-def _looks_like_access_interstitial(text: str) -> bool:
+def _looks_like_access_interstitial(text: str, config: DiscoveryConfig) -> bool:
     """Return True when the result looks like a blocked page or challenge screen."""
-    return any(hint in text for hint in INTERSTITIAL_HINTS)
+    return any(hint in text for hint in config.interstitial_hints)
 
 
 def _looks_like_listicle_title(title: str) -> bool:
@@ -422,19 +357,24 @@ def _looks_like_listicle_title(title: str) -> bool:
     )
 
 
-def _looks_like_product_description(description: str) -> bool:
+def _looks_like_product_description(description: str, config: DiscoveryConfig) -> bool:
     """Return True when the description sounds like software, not editorial content."""
-    return any(hint in description for hint in PRODUCT_HINTS)
+    return any(hint in description for hint in config.product_hints)
 
 
-def _looks_like_job_or_career_content(path: str, title: str, description: str) -> bool:
+def _looks_like_job_or_career_content(
+    path: str,
+    title: str,
+    description: str,
+    config: DiscoveryConfig,
+) -> bool:
     """Return True when the result is clearly a job posting or careers page."""
     combined_text = f"{title} {description}".strip()
-    return any(path_hint in path for path_hint in JOB_PATH_HINTS) or any(
+    return any(path_hint in path for path_hint in config.job_path_hints) or any(
         hint in combined_text for hint in ("career", "careers", "job application", "jobs")
     )
 
 
-def _looks_like_customer_success_result(text: str) -> bool:
+def _looks_like_customer_success_result(text: str, config: DiscoveryConfig) -> bool:
     """Return True when the result text maps to the Customer Success lifecycle."""
-    return any(hint in text for hint in CUSTOMER_SUCCESS_HINTS)
+    return any(hint in text for hint in config.customer_success_hints)

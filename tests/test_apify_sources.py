@@ -1,7 +1,8 @@
 """Tests for the Apify Google Search discovery adapter."""
 
+from types import SimpleNamespace
+
 from services.discovery import apify_sources
-from services.discovery.discovery_config import GoogleSearchConfig
 
 
 class FakeDatasetItems:
@@ -70,8 +71,8 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
     monkeypatch.setattr(
         apify_sources,
-        "load_google_search_config",
-        lambda: GoogleSearchConfig(max_pages_per_query=7, results_per_page=10),
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(max_pages_per_query=7, results_per_page=10),
     )
 
     results = apify_sources.fetch_google_search(["query one", "query two"])
@@ -118,6 +119,42 @@ def test_fetch_google_search_returns_empty_list_for_empty_queries():
     assert apify_sources.fetch_google_search([]) == []
 
 
+def test_fetch_google_search_candidate_records_include_query_and_rank(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "Vendor One",
+                    "url": "https://vendorone.com/platform",
+                    "description": "Customer success AI platform",
+                },
+                {
+                    "title": "Vendor Two",
+                    "url": "https://vendortwo.io",
+                    "description": "Renewal automation software",
+                },
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(),
+    )
+
+    results = apify_sources.fetch_google_search_candidate_records(["customer success ai"])
+
+    assert results[0]["candidate_domain"] == "vendorone.com"
+    assert results[0]["source_query"] == "customer success ai"
+    assert results[0]["source_rank"] == 1
+    assert results[0]["candidate_status"] == "new"
+    assert results[0]["status"] == "new"
+    assert results[1]["candidate_domain"] == "vendortwo.io"
+    assert results[1]["source_rank"] == 2
+
+
 def test_get_apify_client_requires_api_token(monkeypatch):
     monkeypatch.delenv("APIFY_API_TOKEN", raising=False)
 
@@ -155,8 +192,8 @@ def test_fetch_google_search_uses_organic_result_urls_not_google_domain(monkeypa
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
     monkeypatch.setattr(
         apify_sources,
-        "load_google_search_config",
-        lambda: GoogleSearchConfig(),
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(),
     )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
@@ -213,8 +250,8 @@ def test_fetch_google_search_filters_junk_domains_and_generic_content(monkeypatc
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
     monkeypatch.setattr(
         apify_sources,
-        "load_google_search_config",
-        lambda: GoogleSearchConfig(),
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(),
     )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
@@ -245,8 +282,8 @@ def test_fetch_google_search_keeps_vendor_domains_and_prefers_root_homepage(monk
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
     monkeypatch.setattr(
         apify_sources,
-        "load_google_search_config",
-        lambda: GoogleSearchConfig(),
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(),
     )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
@@ -287,8 +324,8 @@ def test_fetch_google_search_filters_jobs_and_interstitial_pages(monkeypatch):
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
     monkeypatch.setattr(
         apify_sources,
-        "load_google_search_config",
-        lambda: GoogleSearchConfig(),
+        "load_pipeline_config",
+        lambda: _fake_pipeline_config(),
     )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
@@ -360,3 +397,40 @@ def test_fetch_google_search_drops_generic_ai_tools_without_cs_signals(monkeypat
             "source": "google_search",
         }
     ]
+
+
+def _fake_pipeline_config(*, max_pages_per_query: int = 5, results_per_page: int = 10):
+    return SimpleNamespace(
+        discovery=SimpleNamespace(
+            actor_id=apify_sources.GOOGLE_SEARCH_ACTOR,
+            max_pages_per_query=max_pages_per_query,
+            results_per_page=results_per_page,
+            source_engine="google_search",
+            junk_domain_denylist=(
+                "facebook.com",
+                "gartner.com",
+                "google.com",
+                "instagram.com",
+                "jobs.ca",
+                "linkedin.com",
+                "medium.com",
+                "reddit.com",
+                "substack.com",
+                "slashdot.org",
+                "sourceforge.net",
+                "twitter.com",
+                "toolify.ai",
+                "wikipedia.org",
+                "x.com",
+                "youtube.com",
+            ),
+            article_path_hints=("/article", "/articles", "/blog", "/community", "/forum", "/guide", "/news", "/resources"),
+            content_hints=("best ", "blog", "community", "compare", "comparison", "guide", "jobs", "newsletter", "review", "reviews", "top ", "vs "),
+            product_hints=("automation", "copilot", "platform", "software", "solution", "tool"),
+            customer_success_hints=("customer success", "renewal", "onboarding", "adoption", "retention", "churn", "support automation"),
+            noise_subdomain_prefixes=("blog.", "careers.", "community.", "jobs.", "newsletter."),
+            noise_domain_hints=("greenhouse", "myworkdayjobs"),
+            job_path_hints=("/career", "/careers", "/job", "/jobs"),
+            interstitial_hints=("403 forbidden", "access denied", "just a moment"),
+        )
+    )

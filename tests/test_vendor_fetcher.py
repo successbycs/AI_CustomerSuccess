@@ -26,6 +26,7 @@ def test_fetch_vendor_homepage_returns_structured_payload(monkeypatch):
     expected = {
         "vendor_name": "Gainsight",
         "website": "https://gainsight.com",
+        "url": "https://gainsight.com",
         "source": "web_search",
         "page_type": "homepage",
         "status_code": 200,
@@ -54,6 +55,7 @@ def test_fetch_vendor_homepage_handles_network_error(monkeypatch):
     expected = {
         "vendor_name": "Gainsight",
         "website": "https://gainsight.com",
+        "url": "https://gainsight.com",
         "source": "web_search",
         "page_type": "homepage",
         "status_code": 0,

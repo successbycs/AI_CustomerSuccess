@@ -51,3 +51,40 @@ def test_extract_visible_text_removes_menu_like_sections_by_class_name():
     result = extract_visible_text(html)
 
     assert result == "Built for product-led teams. Free trial available."
+
+
+def test_extract_visible_text_keeps_header_hero_copy_when_not_navigation():
+    html = """
+    <html>
+      <body>
+        <header class="hero-shell">
+          <h1>AI customer success platform</h1>
+          <p>Built for onboarding, renewals, and customer health.</p>
+        </header>
+        <nav>
+          <a href="/pricing">Pricing</a>
+        </nav>
+      </body>
+    </html>
+    """
+
+    result = extract_visible_text(html)
+
+    assert result == "AI customer success platform Built for onboarding, renewals, and customer health."
+
+
+def test_extract_visible_text_supports_deterministic_truncation():
+    html = """
+    <html>
+      <body>
+        <main>
+          <p>Customer success platform for SaaS teams.</p>
+          <p>Improves onboarding and renewal workflows.</p>
+        </main>
+      </body>
+    </html>
+    """
+
+    result = extract_visible_text(html, max_chars=35)
+
+    assert result == "Customer success platform for SaaS"

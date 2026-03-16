@@ -1,0 +1,49 @@
+# Enrichment settings for homepage-driven site exploration.
+#
+# Editing guidance:
+# - `max_non_homepage_pages` caps how many extra pages are fetched beyond the homepage.
+# - `request_timeout_seconds` controls how long the explorer waits for each
+#   discovered page before skipping it.
+# - `page_priority` controls the order in which page types are fetched.
+# - `page_patterns` match both URLs and anchor text on the homepage.
+# - `junk_hints` are path/text hints for pages that should usually be skipped.
+
+[site_explorer]
+max_non_homepage_pages = 5
+request_timeout_seconds = 10
+page_priority = [
+  "pricing_page",
+  "product_page",
+  "case_studies_page",
+  "security_page",
+  "about_page",
+  "integrations_page",
+]
+junk_hints = [
+  "careers",
+  "cookie",
+  "docs",
+  "documentation",
+  "legal",
+  "login",
+  "privacy",
+  "signin",
+  "sign-in",
+  "support",
+  "terms",
+]
+
+[site_explorer.page_patterns]
+pricing_page = ["pricing"]
+product_page = ["product", "platform", "features", "solutions"]
+case_studies_page = [
+  "case studies",
+  "case-study",
+  "case-studies",
+  "customer stories",
+  "customer-story",
+  "customers",
+]
+about_page = ["about", "company"]
+security_page = ["security", "trust", "compliance"]
+integrations_page = ["integrations", "integration", "apps", "marketplace"]

@@ -36,7 +36,7 @@ def test_extract_vendor_intelligence_returns_none_without_openai_config(monkeypa
 def test_log_runtime_configuration_logs_once(monkeypatch, caplog):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
-    monkeypatch.setattr(llm_extractor, "_runtime_config_logged_for_process", False)
+    monkeypatch.setattr(llm_extractor, "_runtime_config_logged_for_run", False)
     caplog.set_level("INFO")
 
     llm_extractor.log_runtime_configuration()
@@ -45,6 +45,23 @@ def test_log_runtime_configuration_logs_once(monkeypatch, caplog):
     assert caplog.text.count("OpenAI LLM extraction config: enabled=False") == 1
     assert llm_extractor.OPENAI_API_URL in caplog.text
     assert llm_extractor.DEFAULT_OPENAI_MODEL in caplog.text
+    assert "missing=OPENAI_API_KEY" in caplog.text
+
+
+def test_get_configured_model_falls_back_when_env_is_blank(monkeypatch):
+    monkeypatch.setenv("OPENAI_MODEL", "   ")
+
+    assert llm_extractor.get_configured_model() == llm_extractor.DEFAULT_OPENAI_MODEL
+
+
+def test_start_pipeline_run_resets_llm_runtime_state(monkeypatch):
+    monkeypatch.setattr(llm_extractor, "_llm_is_disabled_for_run", True)
+    monkeypatch.setattr(llm_extractor, "_runtime_config_logged_for_run", True)
+
+    llm_extractor.start_pipeline_run()
+
+    assert llm_extractor._llm_is_disabled_for_run is False
+    assert llm_extractor._runtime_config_logged_for_run is False
 
 
 def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
@@ -62,7 +79,7 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
                     '{"is_cs_relevant": true, "mission": "Reduce churn for customer success teams.", '
                     '"usp": "Predict churn before it happens.", '
                     '"use_cases": ["churn prediction", "renewal forecasting"], '
-                    '"pricing": ["contact sales", "per seat"], '
+                    '"pricing": "contact sales | per seat", '
                     '"free_trial": false, "soc2": true, "founded": "2022", "confidence": "high"}'
                 )
             }
@@ -85,13 +102,14 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
     assert result is not None
     assert captured_request["url"] == llm_extractor.OPENAI_API_URL
     assert captured_request["timeout"] == 45
+    assert "temperature" not in captured_request["json"]
     assert captured_request["json"]["input"][1]["content"][0]["text"].startswith("Extract vendor intelligence")
     assert captured_request["json"]["text"]["format"]["type"] == "json_schema"
     assert result.is_cs_relevant is True
     assert result.mission == "Reduce churn for customer success teams."
     assert result.usp == "Predict churn before it happens."
     assert result.use_cases == ["churn prediction", "renewal forecasting"]
-    assert result.pricing == ["contact sales", "per seat"]
+    assert result.pricing == "contact sales | per seat"
     assert result.free_trial is False
     assert result.soc2 is True
     assert result.founded == "2022"
@@ -104,6 +122,17 @@ def test_extract_vendor_intelligence_returns_none_when_json_is_invalid(monkeypat
     result = llm_extractor.extract_vendor_intelligence(
         {"homepage": {"website": "https://example.com", "text": "Example vendor homepage"}},
         request_post=lambda *args, **kwargs: FakeResponse({"output_text": "not-json"}),
+    )
+
+    assert result is None
+
+
+def test_extract_vendor_intelligence_returns_none_when_structured_output_is_missing(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Example vendor homepage"}},
+        request_post=lambda *args, **kwargs: FakeResponse({"output": [{"content": [{"type": "refusal"}]}]}),
     )
 
     assert result is None
@@ -124,7 +153,7 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
                                 "text": (
                                     '{"is_cs_relevant": true, "mission": "Improve adoption.", '
                                     '"usp": "Lifecycle intelligence.", '
-                                    '"use_cases": ["onboarding"], "pricing": ["contact sales"], '
+                                    '"use_cases": ["onboarding"], "pricing": "contact sales", '
                                     '"free_trial": null, "soc2": true, "founded": "2021", "confidence": "medium"}'
                                 ),
                             }
@@ -142,7 +171,7 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
 
 def test_extract_vendor_intelligence_disables_llm_after_first_client_error(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setattr(llm_extractor, "_llm_is_disabled_for_process", False)
+    monkeypatch.setattr(llm_extractor, "_llm_is_disabled_for_run", False)
     call_count = {"count": 0}
 
     def fake_post(*args, **kwargs):
@@ -165,3 +194,39 @@ def test_extract_vendor_intelligence_disables_llm_after_first_client_error(monke
     assert first_result is None
     assert second_result is None
     assert call_count["count"] == 1
+
+
+def test_extract_vendor_intelligence_normalizes_list_pricing_to_string(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Customer success pricing page"}},
+        request_post=lambda *args, **kwargs: FakeResponse(
+            {
+                "output_text": (
+                    '{"is_cs_relevant": true, "mission": "", "usp": "", '
+                    '"use_cases": [], "pricing": ["contact sales", "annual pricing"], '
+                    '"free_trial": null, "soc2": null, "founded": "", "confidence": "medium"}'
+                )
+            }
+        ),
+    )
+
+    assert result is not None
+    assert result.pricing == "contact sales | annual pricing"
+
+
+def test_build_site_text_truncates_each_page_and_total_size():
+    long_text = "A" * (llm_extractor.MAX_PAGE_TEXT_CHARS + 500)
+    site_text = llm_extractor._build_site_text(  # noqa: SLF001
+        {
+            "homepage": {"website": "https://example.com", "text": long_text},
+            "product_page": {"website": "https://example.com/product", "text": long_text},
+            "pricing_page": {"website": "https://example.com/pricing", "text": long_text},
+            "about_page": {"website": "https://example.com/about", "text": long_text},
+            "security_page": {"website": "https://example.com/security", "text": long_text},
+        }
+    )
+
+    assert len(site_text) <= llm_extractor.MAX_SITE_TEXT_CHARS
+    assert "A" * (llm_extractor.MAX_PAGE_TEXT_CHARS + 100) not in site_text

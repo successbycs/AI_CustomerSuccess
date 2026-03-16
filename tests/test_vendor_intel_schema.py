@@ -22,6 +22,9 @@ def test_vendor_intelligence_schema_fields_and_types():
         founded="2022",
         confidence="high",
         evidence_urls=["https://example.com/proof"],
+        directory_fit="strong",
+        directory_category="Renew",
+        include_in_directory=True,
     )
 
     # Validate schema structure and type enforcement
@@ -38,3 +41,6 @@ def test_vendor_intelligence_schema_fields_and_types():
     assert isinstance(vendor.value_statements, list)
     assert isinstance(vendor.pricing, list)
     assert isinstance(vendor.evidence_urls, list)
+    assert vendor.directory_fit == "strong"
+    assert vendor.directory_category == "Renew"
+    assert vendor.include_in_directory is True

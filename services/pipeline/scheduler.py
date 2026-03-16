@@ -11,11 +11,16 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from services.discovery.discovery_config import (
+    DEFAULT_GOOGLE_SEARCH_QUERIES,
+    load_google_search_config,
+    parse_google_search_queries,
+)
+from services.pipeline.scheduler_config import load_scheduler_config
 from services.pipeline.run_mvp_pipeline import run_mvp_pipeline
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DISCOVERY_QUERY = "ai customer success platform"
 STAGE_ORDER = [
     "Sign",
     "Onboard",
@@ -35,14 +40,15 @@ def load_environment() -> None:
 
 
 def run_discovery_job() -> list[dict[str, str]]:
-    """Run the daily discovery pipeline using the configured default query."""
-    query = os.getenv("DISCOVERY_QUERY", DEFAULT_DISCOVERY_QUERY)
-    logger.info("Running scheduled discovery for query: %s", query)
-    return run_mvp_pipeline(query)
+    """Run the daily discovery pipeline using the configured default queries."""
+    queries = _load_scheduled_discovery_queries()
+    logger.info("Running scheduled discovery for queries: %s", ", ".join(queries))
+    return run_mvp_pipeline(queries)
 
 
 def run_weekly_digest_job() -> None:
     """Build and post the weekly lifecycle-stage digest."""
+    scheduler_config = load_scheduler_config()
     required_vars = [
         "SUPABASE_URL",
         "SUPABASE_KEY",
@@ -58,7 +64,7 @@ def run_weekly_digest_job() -> None:
     from supabase import create_client
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-    cutoff = (date.today() - timedelta(days=7)).isoformat()
+    cutoff = (date.today() - timedelta(days=scheduler_config.digest.lookback_days)).isoformat()
     response = (
         supabase.table("cs_vendors")
         .select("name,website,mission,lifecycle_stages,first_seen,is_new")
@@ -107,7 +113,7 @@ def run_weekly_digest_job() -> None:
             "text": message,
             "mrkdwn": True,
         },
-        timeout=30,
+        timeout=scheduler_config.digest.slack_timeout_seconds,
     )
     response.raise_for_status()
     payload = response.json()
@@ -131,6 +137,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_scheduled_discovery_queries() -> list[str]:
+    """Resolve scheduled discovery queries from env overrides or repo config."""
+    env_queries = os.getenv("DISCOVERY_QUERIES")
+    if env_queries:
+        parsed_queries = parse_google_search_queries(env_queries)
+        if parsed_queries:
+            return parsed_queries
+
+    env_query = os.getenv("DISCOVERY_QUERY")
+    if env_query:
+        return [env_query.strip()]
+
+    config_queries = list(load_google_search_config().queries)
+    if config_queries:
+        return config_queries
+
+    return list(DEFAULT_GOOGLE_SEARCH_QUERIES)
+
+
 def main() -> int:
     """Run the scheduler entrypoint."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -147,9 +172,21 @@ def main() -> int:
 
     from apscheduler.schedulers.blocking import BlockingScheduler
 
+    scheduler_config = load_scheduler_config()
     scheduler = BlockingScheduler()
-    scheduler.add_job(run_discovery_job, "cron", hour=7, minute=0)
-    scheduler.add_job(run_weekly_digest_job, "cron", day_of_week="mon", hour=8)
+    scheduler.add_job(
+        run_discovery_job,
+        "cron",
+        hour=scheduler_config.discovery.hour,
+        minute=scheduler_config.discovery.minute,
+    )
+    scheduler.add_job(
+        run_weekly_digest_job,
+        "cron",
+        day_of_week=scheduler_config.digest.day_of_week,
+        hour=scheduler_config.digest.hour,
+        minute=scheduler_config.digest.minute,
+    )
     logger.info("Starting Python-owned scheduler")
     scheduler.start()
     return 0

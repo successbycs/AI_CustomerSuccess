@@ -17,8 +17,14 @@ The CLI loads environment variables from a local `.env` file automatically.
 Google Sheets output is optional and uses `GOOGLE_SHEETS_ID` plus
 `GOOGLE_SHEETS_CREDENTIALS_JSON`.
 
-Discovery crawl depth is configured in `config/discovery.toml`.
-The current repo-level default is `max_pages_per_query = 20`.
+Operator-tunable settings now live in repo-level config files:
+- `config/discovery.toml` for Apify queries, crawl depth, and Google result filtering
+- `config/enrichment.toml` for site exploration limits and timeouts
+- `config/llm.toml` for OpenAI model and payload limits
+- `config/export.toml` for Google Sheets worksheet and column order
+- `config/scheduler.toml` for APScheduler timing and digest lookback
+
+The current repo-level default discovery depth is `max_pages_per_query = 5`.
 
 ## Run Tests
 

@@ -21,6 +21,14 @@ def test_build_vendor_profile_merges_source_and_evidence_urls():
             "website": "https://example.com/pricing",
             "text": "$99 per seat",
         },
+        "extra_pages": [
+            {
+                "vendor_name": "",
+                "url": "https://example.com/ai-copilot",
+                "website": "https://example.com/ai-copilot",
+                "text": "AI copilot for CSMs",
+            }
+        ],
     }
     intelligence = VendorIntelligence(
         vendor_name="ExampleCorp",
@@ -44,7 +52,11 @@ def test_build_vendor_profile_merges_source_and_evidence_urls():
     assert result.evidence_urls == [
         "https://example.com",
         "https://example.com/pricing",
+        "https://example.com/ai-copilot",
     ]
+    assert result.directory_fit == "medium"
+    assert result.directory_category == "cs_core"
+    assert result.include_in_directory is True
 
 
 def test_build_vendor_profile_falls_back_to_discovery_data_when_homepage_fields_are_missing():
@@ -66,3 +78,5 @@ def test_build_vendor_profile_falls_back_to_discovery_data_when_homepage_fields_
     assert result.vendor_name == "DiscoveryName"
     assert result.website == "https://fallback.example.com"
     assert result.source == "google_search"
+    assert result.directory_fit == "medium"
+    assert result.include_in_directory is True

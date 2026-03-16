@@ -238,6 +238,9 @@ class VendorIntelligence:
     value_statements: list[str] = field(default_factory=list)
     confidence: str = ""
     evidence_urls: list[str] = field(default_factory=list)
+    directory_fit: str = ""
+    directory_category: str = ""
+    include_in_directory: bool | None = None
 
     def validate(self) -> None:
         """Validate the schema structure and types.
@@ -249,7 +252,15 @@ class VendorIntelligence:
             raise TypeError("vendor_name must be a string")
         if not isinstance(self.website, str):
             raise TypeError("website must be a string")
-        for field_name in ["source", "mission", "usp", "founded", "confidence"]:
+        for field_name in [
+            "source",
+            "mission",
+            "usp",
+            "founded",
+            "confidence",
+            "directory_fit",
+            "directory_category",
+        ]:
             value = getattr(self, field_name)
             if not isinstance(value, str):
                 raise TypeError(f"{field_name} must be a string")
@@ -270,7 +281,7 @@ class VendorIntelligence:
             if not all(isinstance(item, str) for item in value):
                 raise TypeError(f"All items in {field_name} must be strings")
 
-        for field_name in ["free_trial", "soc2"]:
+        for field_name in ["free_trial", "soc2", "include_in_directory"]:
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, bool):
                 raise TypeError(f"{field_name} must be a bool or None")
@@ -318,7 +329,7 @@ def extract_vendor_intelligence(
 
     return VendorIntelligence(
         vendor_name=str(homepage_payload.get("vendor_name", "")),
-        website=str(homepage_payload.get("website", "")),
+        website=str(homepage_payload.get("website") or homepage_payload.get("url") or ""),
         source=str(homepage_payload.get("source", "")),
         mission=_extract_mission(homepage_text or combined_text),
         usp=_extract_usp(value_statements, combined_text),
@@ -516,11 +527,17 @@ def _determine_confidence(
 def _coerce_page_payloads(page_payload: dict[str, object]) -> dict[str, dict[str, str | int]]:
     """Accept either a single homepage payload or explored page payloads."""
     if "homepage" in page_payload and isinstance(page_payload["homepage"], dict):
-        return {
+        page_payloads = {
             page_name: page_value
             for page_name, page_value in page_payload.items()
             if isinstance(page_value, dict)
         }
+        extra_pages = page_payload.get("extra_pages", [])
+        if isinstance(extra_pages, list):
+            for index, extra_page in enumerate(extra_pages, start=1):
+                if isinstance(extra_page, dict):
+                    page_payloads[f"extra_page_{index}"] = extra_page
+        return page_payloads
 
     return {"homepage": page_payload}  # type: ignore[return-value]
 
@@ -528,7 +545,19 @@ def _coerce_page_payloads(page_payload: dict[str, object]) -> dict[str, dict[str
 def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
     """Return the combined text from explored vendor pages."""
     texts: list[str] = []
-    for page_key in ["homepage", "product_page", "pricing_page", "case_studies_page", "about_page", "security_page"]:
+    ordered_page_keys = [
+        "homepage",
+        "product_page",
+        "pricing_page",
+        "case_studies_page",
+        "about_page",
+        "security_page",
+        "integrations_page",
+    ]
+    ordered_page_keys.extend(
+        page_key for page_key in page_payloads if page_key.startswith("extra_page_")
+    )
+    for page_key in ordered_page_keys:
         page_text = _page_text(page_payloads, page_key)
         if page_text:
             texts.append(page_text)
@@ -538,10 +567,15 @@ def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
 def _combine_relevance_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
     """Return text from the highest-signal relevance pages only."""
     texts: list[str] = []
-    for page_key in ["homepage", "product_page", "about_page"]:
+    for page_key in ["homepage", "product_page", "about_page", "integrations_page"]:
         page_text = _page_text(page_payloads, page_key)
         if page_text:
             texts.append(page_text)
+    for page_key in page_payloads:
+        if page_key.startswith("extra_page_"):
+            page_text = _page_text(page_payloads, page_key)
+            if page_text:
+                texts.append(page_text)
     return " ".join(texts).strip()
 
 
@@ -554,7 +588,7 @@ def _collect_page_urls(page_payloads: dict[str, dict[str, str | int]]) -> list[s
     """Return URLs used as evidence for extracted signals."""
     evidence_urls: list[str] = []
     for page_payload in page_payloads.values():
-        page_url = str(page_payload.get("website", "")).strip()
+        page_url = str(page_payload.get("website") or page_payload.get("url") or "").strip()
         if page_url and page_url not in evidence_urls:
             evidence_urls.append(page_url)
     return evidence_urls

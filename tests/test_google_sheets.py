@@ -34,6 +34,7 @@ def test_vendor_intelligence_to_sheet_row():
     expected = {
         "vendor_name": "ExampleCorp",
         "website": "https://example.com",
+        "source": "web_search",
         "mission": "Improve customer retention",
         "usp": "reduce churn",
         "icp": "SaaS companies|Mid-market teams",
@@ -48,6 +49,9 @@ def test_vendor_intelligence_to_sheet_row():
         "value_statements": "Increases retention|Boosts ARR",
         "confidence": "high",
         "evidence_urls": "https://example.com/proof",
+        "directory_fit": "",
+        "directory_category": "",
+        "include_in_directory": "",
     }
 
     assert result == expected
@@ -58,6 +62,7 @@ def test_write_rows_to_csv(tmp_path: Path):
         {
             "vendor_name": "ExampleCorp",
             "website": "https://example.com",
+            "source": "web_search",
             "mission": "Improve customer retention",
             "usp": "reduce churn",
             "icp": "SaaS companies|Mid-market teams",
@@ -72,6 +77,9 @@ def test_write_rows_to_csv(tmp_path: Path):
             "value_statements": "Increases retention|Boosts ARR",
             "confidence": "high",
             "evidence_urls": "https://example.com/proof",
+            "directory_fit": "",
+            "directory_category": "",
+            "include_in_directory": "",
         }
     ]
 
@@ -87,6 +95,7 @@ def test_write_rows_to_csv(tmp_path: Path):
     assert reader.fieldnames == [
         "vendor_name",
         "website",
+        "source",
         "mission",
         "usp",
         "icp",
@@ -101,6 +110,9 @@ def test_write_rows_to_csv(tmp_path: Path):
         "value_statements",
         "confidence",
         "evidence_urls",
+        "directory_fit",
+        "directory_category",
+        "include_in_directory",
     ]
     assert result == rows
 
@@ -115,8 +127,17 @@ class FakeAppendRequest:
 
 
 class FakeValuesResource:
-    def __init__(self, recorder: dict):
+    def __init__(self, recorder: dict, get_response: dict | None = None):
         self.recorder = recorder
+        self.get_response = get_response or {}
+
+    def get(self, **kwargs):
+        self.recorder.setdefault("get_calls", []).append(kwargs)
+        return FakeGetRequest(self.recorder, self.get_response)
+
+    def update(self, **kwargs):
+        self.recorder.setdefault("update_calls", []).append(kwargs)
+        return FakeUpdateRequest(self.recorder)
 
     def append(self, **kwargs):
         self.recorder["append_kwargs"] = kwargs
@@ -124,19 +145,85 @@ class FakeValuesResource:
 
 
 class FakeSpreadsheetsResource:
-    def __init__(self, recorder: dict):
+    def __init__(
+        self,
+        recorder: dict,
+        *,
+        get_values_response: dict | None = None,
+        spreadsheet_metadata: dict | None = None,
+    ):
         self.recorder = recorder
+        self.get_values_response = get_values_response or {}
+        self.spreadsheet_metadata = spreadsheet_metadata or {}
 
     def values(self):
-        return FakeValuesResource(self.recorder)
+        return FakeValuesResource(self.recorder, self.get_values_response)
+
+    def get(self, **kwargs):
+        self.recorder.setdefault("spreadsheet_get_calls", []).append(kwargs)
+        return FakeSpreadsheetGetRequest(self.recorder, self.spreadsheet_metadata)
+
+    def batchUpdate(self, **kwargs):
+        self.recorder.setdefault("batch_update_calls", []).append(kwargs)
+        return FakeBatchUpdateRequest(self.recorder)
 
 
 class FakeSheetsService:
+    def __init__(
+        self,
+        recorder: dict,
+        *,
+        get_values_response: dict | None = None,
+        spreadsheet_metadata: dict | None = None,
+    ):
+        self.recorder = recorder
+        self.get_values_response = get_values_response or {}
+        self.spreadsheet_metadata = spreadsheet_metadata or {}
+
+    def spreadsheets(self):
+        return FakeSpreadsheetsResource(
+            self.recorder,
+            get_values_response=self.get_values_response,
+            spreadsheet_metadata=self.spreadsheet_metadata,
+        )
+
+
+class FakeGetRequest:
+    def __init__(self, recorder: dict, response: dict):
+        self.recorder = recorder
+        self.response = response
+
+    def execute(self):
+        self.recorder["get_executed"] = True
+        return self.response
+
+
+class FakeUpdateRequest:
     def __init__(self, recorder: dict):
         self.recorder = recorder
 
-    def spreadsheets(self):
-        return FakeSpreadsheetsResource(self.recorder)
+    def execute(self):
+        self.recorder["update_executed"] = True
+        return {"updatedRows": 1}
+
+
+class FakeSpreadsheetGetRequest:
+    def __init__(self, recorder: dict, response: dict):
+        self.recorder = recorder
+        self.response = response
+
+    def execute(self):
+        self.recorder["spreadsheet_get_executed"] = True
+        return self.response
+
+
+class FakeBatchUpdateRequest:
+    def __init__(self, recorder: dict):
+        self.recorder = recorder
+
+    def execute(self):
+        self.recorder["batch_update_executed"] = True
+        return {"replies": []}
 
 
 def test_load_google_sheets_credentials_info_from_json_env(monkeypatch):
@@ -203,7 +290,10 @@ def test_append_rows_to_google_sheet_uses_correct_column_order(monkeypatch, tmp_
 
     def fake_build_google_sheets_service(credentials_info):
         fake_recorder["credentials_info"] = credentials_info
-        return FakeSheetsService(fake_recorder)
+        return FakeSheetsService(
+            fake_recorder,
+            get_values_response={"values": [google_sheets.GOOGLE_SHEETS_COLUMNS]},
+        )
 
     monkeypatch.setattr(
         google_sheets,
@@ -215,12 +305,13 @@ def test_append_rows_to_google_sheet_uses_correct_column_order(monkeypatch, tmp_
 
     assert fake_recorder["append_kwargs"] == {
         "spreadsheetId": "sheet-id",
-        "range": "vendors!A:P",
+        "range": "vendors!A:T",
         "valueInputOption": "USER_ENTERED",
         "body": {
             "values": [[
                 "ExampleCorp",
                 "https://example.com",
+                "",
                 "Improve customer retention",
                 "reduce churn",
                 "SaaS companies|Mid-market teams",
@@ -235,7 +326,87 @@ def test_append_rows_to_google_sheet_uses_correct_column_order(monkeypatch, tmp_
                 "Increases retention|Boosts ARR",
                 "high",
                 "https://example.com/proof",
+                "",
+                "",
+                "",
             ]]
         },
     }
     assert fake_recorder["executed"] is True
+
+
+def test_append_rows_to_google_sheet_initializes_header_row_when_missing(monkeypatch):
+    rows = [{"vendor_name": "ExampleCorp", "website": "https://example.com"}]
+
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "sheet-id")
+    monkeypatch.setenv(
+        "GOOGLE_SHEETS_CREDENTIALS_JSON",
+        json.dumps({"type": "service_account", "client_email": "test@example.com"}),
+    )
+    fake_recorder = {}
+
+    monkeypatch.setattr(
+        google_sheets,
+        "_build_google_sheets_service",
+        lambda _credentials: FakeSheetsService(fake_recorder, get_values_response={}),
+    )
+
+    google_sheets.append_rows_to_google_sheet(rows)
+
+    assert fake_recorder["update_calls"] == [{
+        "spreadsheetId": "sheet-id",
+        "range": "vendors!A1:T1",
+        "valueInputOption": "RAW",
+        "body": {"values": [google_sheets.GOOGLE_SHEETS_COLUMNS]},
+    }]
+    assert fake_recorder["append_kwargs"]["range"] == "vendors!A:T"
+
+
+def test_append_rows_to_google_sheet_inserts_header_row_when_first_row_is_data(monkeypatch):
+    rows = [{"vendor_name": "ExampleCorp", "website": "https://example.com"}]
+
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "sheet-id")
+    monkeypatch.setenv(
+        "GOOGLE_SHEETS_CREDENTIALS_JSON",
+        json.dumps({"type": "service_account", "client_email": "test@example.com"}),
+    )
+    monkeypatch.setenv("GOOGLE_SHEETS_WORKSHEET", "directory_ops")
+    fake_recorder = {}
+
+    monkeypatch.setattr(
+        google_sheets,
+        "_build_google_sheets_service",
+        lambda _credentials: FakeSheetsService(
+            fake_recorder,
+            get_values_response={"values": [["Existing vendor", "https://example.com"]]},
+            spreadsheet_metadata={
+                "sheets": [{"properties": {"title": "directory_ops", "sheetId": 12345}}]
+            },
+        ),
+    )
+
+    google_sheets.append_rows_to_google_sheet(rows)
+
+    assert fake_recorder["batch_update_calls"] == [{
+        "spreadsheetId": "sheet-id",
+        "body": {
+            "requests": [{
+                "insertDimension": {
+                    "range": {
+                        "sheetId": 12345,
+                        "dimension": "ROWS",
+                        "startIndex": 0,
+                        "endIndex": 1,
+                    },
+                    "inheritFromBefore": False,
+                }
+            }]
+        },
+    }]
+    assert fake_recorder["update_calls"] == [{
+        "spreadsheetId": "sheet-id",
+        "range": "directory_ops!A1:T1",
+        "valueInputOption": "RAW",
+        "body": {"values": [google_sheets.GOOGLE_SHEETS_COLUMNS]},
+    }]
+    assert fake_recorder["append_kwargs"]["range"] == "directory_ops!A:T"

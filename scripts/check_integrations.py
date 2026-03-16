@@ -112,14 +112,23 @@ def check_google_sheets(*, write_test_row: bool) -> dict[str, bool]:
         return results
 
     print("Google Sheets config loaded: yes")
+    worksheet_name = google_sheets._get_google_worksheet_name()
 
     try:
         service = google_sheets._build_google_sheets_service(credentials_info)
-        service.spreadsheets().values().get(
+        header_range = (
+            f"{worksheet_name}!A1:"
+            f"{google_sheets._sheet_column_letter(len(google_sheets.GOOGLE_SHEETS_COLUMNS))}1"
+        )
+        header_values = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range="vendors!A1:G1",
-        ).execute()
+            range=header_range,
+        ).execute().get("values", [])
         print("Google Sheets read worked: yes")
+        if header_values[:1] == [google_sheets.GOOGLE_SHEETS_COLUMNS]:
+            print(f"Google Sheets header aligned: yes ({worksheet_name})")
+        else:
+            print(f"Google Sheets header aligned: no ({worksheet_name})")
     except Exception as error:
         print(f"Google Sheets read worked: no ({error})")
         print("Google Sheets append worked: no")

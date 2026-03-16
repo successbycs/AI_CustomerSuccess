@@ -30,7 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the MVP vendor intelligence pipeline for a search query.",
     )
-    parser.add_argument("query", help="Search query used for vendor discovery")
+    parser.add_argument(
+        "query",
+        nargs="?",
+        help="Optional search query used for vendor discovery. Leave blank to use config/pipeline_config.json queries.",
+    )
     parser.add_argument(
         "--pretty",
         action="store_true",

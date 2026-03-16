@@ -15,19 +15,21 @@ from services.extraction import vendor_profile_builder
 from services.export import google_sheets
 from services.extraction.vendor_intel import VendorIntelligence
 from services.persistence import supabase_client
+from services.pipeline import discovery_runner
+from services.pipeline import enrichment_runner
 
 logger = logging.getLogger(__name__)
 
 VendorCandidate = dict[str, str]
 HomepagePayload = dict[str, str | int]
-ExploredPages = dict[str, HomepagePayload]
+ExploredPages = dict[str, object]
 SheetRow = dict[str, str]
 
 
 def run_mvp_pipeline(
-    query: str,
+    query: str | list[str] | None,
     *,
-    search_web_fn: Callable[[str], list[VendorCandidate]] | None = None,
+    search_web_candidates_fn: Callable[[str | list[str] | None], list[dict[str, object]]] | None = None,
     fetch_vendor_homepage_fn: Callable[[VendorCandidate], HomepagePayload] | None = None,
     explore_vendor_site_fn: Callable[[HomepagePayload], ExploredPages] | None = None,
     extract_vendor_intelligence_fn: Callable[[dict[str, object]], VendorIntelligence] | None = None,
@@ -39,9 +41,11 @@ def run_mvp_pipeline(
     vendor_exists_fn: Callable[[str], bool] | None = None,
     upsert_vendor_result_fn: Callable[[VendorCandidate, HomepagePayload, VendorIntelligence], object]
     | None = None,
+    run_discovery_phase_fn: Callable[..., tuple[list[dict[str, object]], list[VendorCandidate], int]] | None = None,
+    run_enrichment_phase_fn: Callable[..., tuple[list[SheetRow], list[dict[str, object]], int, int]] | None = None,
 ) -> list[SheetRow]:
     """Run the MVP pipeline with optional persistence."""
-    search_web_fn = search_web_fn or web_search.search_web
+    search_web_candidates_fn = search_web_candidates_fn or web_search.search_web_candidates
     fetch_vendor_homepage_fn = fetch_vendor_homepage_fn or vendor_fetcher.fetch_vendor_homepage
     explore_vendor_site_fn = explore_vendor_site_fn or site_explorer.explore_vendor_site
     extract_vendor_intelligence_fn = (
@@ -58,6 +62,8 @@ def run_mvp_pipeline(
         vendor_intelligence_to_sheet_row_fn
         or google_sheets.vendor_intelligence_to_sheet_row
     )
+    run_discovery_phase_fn = run_discovery_phase_fn or discovery_runner.run_discovery_phase
+    run_enrichment_phase_fn = run_enrichment_phase_fn or enrichment_runner.run_enrichment_phase
 
     if vendor_exists_fn is None and supabase_client.is_configured():
         vendor_exists_fn = supabase_client.vendor_exists
@@ -65,65 +71,55 @@ def run_mvp_pipeline(
     if upsert_vendor_result_fn is None and supabase_client.is_configured():
         upsert_vendor_result_fn = supabase_client.upsert_vendor_result
 
-    logger.info("Starting MVP pipeline for query: %s", query)
+    logger.info("Starting MVP pipeline for query set: %s", _format_query_log(query))
+    llm_extractor.start_pipeline_run()
     llm_extractor.log_runtime_configuration()
-    vendor_rows: list[SheetRow] = []
-    skipped_existing_count = 0
+    try:
+        candidate_records, queued_vendor_candidates, skipped_existing_count = run_discovery_phase_fn(
+            query,
+            fetch_candidate_records_fn=search_web_candidates_fn,
+            vendor_exists_fn=vendor_exists_fn,
+        )
+    except Exception as error:
+        if supabase_client.is_persistence_unavailable_error(error):
+            logger.warning("Persistence unavailable, continuing without deduplication: %s", error)
+            vendor_exists_fn = None
+            upsert_vendor_result_fn = None
+            candidate_records, queued_vendor_candidates, skipped_existing_count = run_discovery_phase_fn(
+                query,
+                fetch_candidate_records_fn=search_web_candidates_fn,
+                vendor_exists_fn=None,
+            )
+        else:
+            raise
 
-    vendor_candidates = search_web_fn(query)
-    logger.info("Discovered %s vendor candidates after discovery filtering", len(vendor_candidates))
+    logger.info(
+        "Phase 1 discovery produced %s candidate domains and queued %s vendors for enrichment",
+        len(candidate_records),
+        len(queued_vendor_candidates),
+    )
 
-    for vendor in vendor_candidates:
-        website = vendor["website"]
-        vendor_name = vendor["vendor_name"]
+    vendor_rows, enrichment_results, llm_success_count, llm_fallback_count = run_enrichment_phase_fn(
+        queued_vendor_candidates,
+        fetch_vendor_homepage_fn=fetch_vendor_homepage_fn,
+        explore_vendor_site_fn=explore_vendor_site_fn,
+        extract_vendor_intelligence_fn=extract_vendor_intelligence_fn,
+        extract_vendor_intelligence_llm_fn=extract_vendor_intelligence_llm_fn,
+        merge_vendor_intelligence_fn=merge_vendor_intelligence_fn,
+        build_vendor_profile_fn=build_vendor_profile_fn,
+        vendor_intelligence_to_sheet_row_fn=vendor_intelligence_to_sheet_row_fn,
+        upsert_vendor_result_fn=upsert_vendor_result_fn,
+        drop_reason_fn=_drop_reason,
+    )
 
-        if vendor_exists_fn:
-            try:
-                if vendor_exists_fn(website):
-                    logger.info("Skipping existing vendor: %s", vendor_name)
-                    skipped_existing_count += 1
-                    continue
-            except Exception as error:
-                if supabase_client.is_persistence_unavailable_error(error):
-                    logger.warning("Persistence unavailable, continuing without deduplication: %s", error)
-                    vendor_exists_fn = None
-                    upsert_vendor_result_fn = None
-                else:
-                    raise
-
-        logger.info("Processing vendor: %s", vendor_name)
-        homepage_payload = fetch_vendor_homepage_fn(vendor)
-        try:
-            explored_pages = explore_vendor_site_fn(homepage_payload)
-        except Exception as error:
-            logger.warning("Site exploration failed for %s, using homepage only: %s", vendor_name, error)
-            explored_pages = {"homepage": homepage_payload}
-
-        deterministic_intelligence = extract_vendor_intelligence_fn(explored_pages)
-        llm_result = extract_vendor_intelligence_llm_fn(explored_pages)
-        intelligence = merge_vendor_intelligence_fn(deterministic_intelligence, llm_result)
-        profile = build_vendor_profile_fn(vendor, explored_pages, intelligence)
-
-        drop_reason = _drop_reason(profile, llm_result)
-        if drop_reason:
-            logger.info("Dropping vendor %s: %s", _profile_name(profile), drop_reason)
-            continue
-
-        if upsert_vendor_result_fn:
-            try:
-                upsert_vendor_result_fn(vendor, homepage_payload, profile)
-            except Exception as error:
-                if supabase_client.is_persistence_unavailable_error(error):
-                    logger.warning("Persistence unavailable, continuing without upsert: %s", error)
-                    upsert_vendor_result_fn = None
-                    vendor_exists_fn = None
-                else:
-                    raise
-
-        sheet_row = vendor_intelligence_to_sheet_row_fn(profile)
-        vendor_rows.append(sheet_row)
+    _apply_enrichment_statuses(candidate_records, enrichment_results)
 
     google_sheets.append_rows_to_google_sheet(vendor_rows)
+    logger.info(
+        "LLM stage summary: successes=%s fallback_or_skipped=%s",
+        llm_success_count,
+        llm_fallback_count,
+    )
     logger.info(
         "Pipeline completed with %s sheet rows; skipped %s existing vendors",
         len(vendor_rows),
@@ -155,3 +151,45 @@ def _profile_name(profile: VendorIntelligence | dict[str, object]) -> str:
     if isinstance(profile, dict):
         return str(profile.get("vendor_name", ""))
     return profile.vendor_name
+
+
+def _format_query_log(query: str | list[str] | None) -> str:
+    """Format one or more discovery queries for logging."""
+    if query is None:
+        return "config default queries"
+    if isinstance(query, str):
+        return query
+    return ", ".join(query)
+
+
+def _count_page_payloads(explored_pages: ExploredPages) -> int:
+    """Return the number of fetched page payloads in an explored page bundle."""
+    page_count = 0
+    for page_value in explored_pages.values():
+        if isinstance(page_value, dict):
+            page_count += 1
+            continue
+        if isinstance(page_value, list):
+            page_count += sum(1 for item in page_value if isinstance(item, dict))
+    return page_count
+
+
+def _apply_enrichment_statuses(
+    candidate_records: list[dict[str, object]],
+    enrichment_results: list[dict[str, object]],
+) -> None:
+    """Update candidate record statuses from Phase 2 results."""
+    result_by_domain = {
+        str(result.get("candidate_domain", "")): result
+        for result in enrichment_results
+    }
+    for candidate_record in candidate_records:
+        candidate_domain = str(candidate_record.get("candidate_domain", ""))
+        if candidate_domain in result_by_domain:
+            result = result_by_domain[candidate_domain]
+            status = str(result.get("status", ""))
+            candidate_record["candidate_status"] = status
+            candidate_record["status"] = status
+            drop_reason = str(result.get("drop_reason", "")).strip()
+            if drop_reason:
+                candidate_record["drop_reason"] = drop_reason

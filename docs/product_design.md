@@ -10,8 +10,9 @@ The target architecture introduces a dual-extraction model:
 Level 1 deterministic extraction and Level 2 LLM-assisted extraction.
 
 Current implementation status:
-the codebase at this checkpoint implements Level 1 deterministic extraction only.
-Level 2 remains planned work and is not active in the current MVP pipeline.
+the codebase at this checkpoint runs Level 1 deterministic extraction as the baseline
+and Level 2 LLM-assisted extraction as an active optional enrichment layer.
+If Level 2 is unavailable, the MVP pipeline falls back to Level 1 without failing the run.
 
 ---
 
@@ -27,6 +28,7 @@ Each vendor row contains fields such as:
 
 vendor_name  
 website  
+source  
 mission  
 usp  
 icp  
@@ -41,6 +43,9 @@ customers
 value_statements  
 confidence  
 evidence_urls  
+directory_fit  
+directory_category  
+include_in_directory  
 
 ---
 
@@ -120,6 +125,11 @@ If Apify were replaced with another crawling provider tomorrow, only services/di
 
 # System Pipeline
 
+The crawl model is now explicit:
+
+Phase 1 = discovery crawl  
+Phase 2 = vendor enrichment crawl  
+
 Daily pipeline
 
 Pipeline stages
@@ -132,31 +142,37 @@ Vendor Intelligence Extraction
 Vendor Profile Builder  
 Dataset Export  
 
-Python APScheduler fires at 07:00 UTC inside the running service  
+Python APScheduler fires using the configured discovery schedule in `config/scheduler.toml`  
 ↓  
 Python orchestrator triggers discovery  
 ↓  
-Python calls Apify actors for discovery sources  
+Python loads crawl/runtime settings from `config/pipeline_config.json` and calls Apify actors for discovery sources  
 ↓  
 Apify returns candidate URLs and metadata  
 ↓  
-Python normalises candidates and deduplicates by domain  
+Python normalises candidates into candidate-domain records and deduplicates by domain across all configured queries  
 ↓  
-Python checks Supabase for known vendors  
+Python marks accepted domains as queued for enrichment and skips already-enriched domains  
 ↓  
-New vendors proceed to enrichment  
+Phase 2 enrichment proceeds only on queued domains  
 ↓  
 Python fetches homepage text (3000-5000 characters)  
 ↓  
-Python explores up to 5 high-signal vendor pages  
+Python explores a bounded set of high-signal internal pages from `config/pipeline_config.json`  
 ↓  
 Python extracts clean visible text from those pages  
 ↓  
 Level 1 deterministic extraction runs  
 ↓  
-Python builds one vendor profile record  
+Level 2 LLM extraction runs when configured in `config/pipeline_config.json`  
+↓  
+Python merges deterministic and LLM signals into one vendor profile record  
 ↓  
 Python classifies lifecycle stages  
+↓  
+Python assigns directory relevance labels and include/exclude decisions  
+↓  
+Vendors marked non-relevant or low-confidence are dropped  
 ↓  
 Python upserts to Supabase  
 ↓  
@@ -164,7 +180,7 @@ Python appends row to Google Sheets
 
 Weekly digest
 
-Python APScheduler fires Monday 08:00 UTC inside the running service  
+Python APScheduler fires using the configured digest schedule in `config/scheduler.toml`  
 ↓  
 Python queries vendors added in last 7 days  
 ↓  
@@ -185,6 +201,10 @@ The pipeline is triggered by the Python service itself, not by GitHub Actions.
 No external cron or GitHub Actions are part of the target design.
 
 APScheduler is used.
+
+The active scheduler times, digest lookback window, and Slack timeout are repo-configured in:
+
+`config/scheduler.toml`
 
 Example:
 
@@ -233,6 +253,38 @@ discovery_source
 
 Python deduplicates candidates by domain before processing.
 
+Google Search discovery and pipeline runtime settings are operator-configured in:
+
+`config/pipeline_config.json`
+
+The pipeline config controls:
+
+queries  
+Apify actor ID  
+pages per query  
+results per page  
+max candidate domains per run  
+Google result filtering and denylist heuristics  
+max internal pages per vendor  
+page matching and priority  
+directory relevance thresholds and hints  
+LLM enable flag and model  
+Google Sheets worksheet name and columns  
+
+Phase 1 discovery returns candidate records with fields such as:
+
+candidate_domain  
+candidate_title  
+candidate_description  
+source_query  
+source_engine  
+source_rank  
+discovered_at  
+candidate_status  
+status  
+discovery_notes  
+drop_reason  
+
 ---
 
 # Deduplication
@@ -256,11 +308,12 @@ Collect homepage content containing commercial intelligence.
 Process
 
 Python fetches homepage via requests  
-10 second timeout  
-up to 5 pages per vendor  
-pricing, product, case studies, about, security  
+configurable request timeout  
+configurable cap of up to 5 non-homepage pages per vendor  
+configurable page matching and priority for pricing, product, case studies, security, about, and integrations  
 unreachable pages skipped safely  
 same-domain links only  
+obvious junk pages such as privacy, terms, careers, login, and docs are deprioritised or skipped  
 
 Returned page payloads include cleaned visible text suitable for deterministic extraction.
 
@@ -272,6 +325,8 @@ product_page
 case_studies_page  
 about_page  
 security_page  
+integrations_page  
+extra_pages  
 
 ---
 
@@ -285,7 +340,9 @@ Process
 
 Remove scripts  
 Remove navigation and footer noise  
+Remove cookie-banner and consent noise where practical  
 Normalise whitespace  
+Support deterministic per-page truncation when needed  
 Return clean readable text for rule extraction  
 
 ---
@@ -298,7 +355,19 @@ Both operate on the same vendor page dataset.
 
 Current checkpoint:
 Level 1 deterministic extraction is active across homepage plus explored high-signal pages.
-Level 2 remains planned work.
+Level 2 LLM extraction is also active when OpenAI configuration is available.
+
+Level 2 runtime knobs are repo-configured in:
+
+`config/pipeline_config.json`
+
+That config controls:
+
+default OpenAI model  
+request timeout  
+per-page text cap  
+total site-text cap  
+error body truncation for logs  
 
 Current deterministic fields include:
 
@@ -315,6 +384,9 @@ case_studies
 customers  
 value_statements  
 confidence  
+directory_fit  
+directory_category  
+include_in_directory  
 
 ---
 
@@ -342,11 +414,15 @@ customers
 value_statements  
 confidence  
 evidence_urls  
+source  
+directory_fit  
+directory_category  
+include_in_directory  
 
-Level 1 deterministic extraction is implemented and is the only active extraction layer.
-Level 2 semantic extraction via LLM remains planned and is not yet active.
+Level 1 deterministic extraction is implemented and remains the baseline extraction layer.
+Level 2 semantic extraction via LLM is active as an optional enrichment pass.
 
-Level 1 guarantees baseline structured output even before Level 2 exists.
+Level 1 guarantees baseline structured output even if Level 2 fails or is unavailable.
 
 ---
 
@@ -418,7 +494,8 @@ Implementation
 
 services/extraction/llm_extractor.py
 
-Python calls the OpenAI ChatGPT API with homepage text.
+Python calls the OpenAI Responses API with vendor website text compiled from homepage plus explored pages.
+Input size is bounded deterministically using the configured per-page and total site-text caps.
 
 The LLM returns structured JSON containing:
 
@@ -453,6 +530,7 @@ confidence = low
 the vendor is dropped.
 
 Lifecycle stage classification is handled by Python using the extracted signals.
+If the LLM call fails, deterministic extraction still produces the vendor profile.
 
 ---
 
@@ -483,7 +561,7 @@ CREATE TABLE cs_vendors (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  name TEXT NOT NULL,
  website TEXT UNIQUE NOT NULL,
- discovery_source TEXT,
+ source TEXT,
  mission TEXT,
  usp TEXT,
  pricing TEXT,
@@ -503,16 +581,23 @@ Upserts use:
 
 ON CONFLICT (website) DO UPDATE
 
+The running system currently keeps discovery candidates as explicit Phase 1 records in code and persists enriched vendor profiles to Supabase in Phase 2.
+
 ---
 
 # Google Sheets Export
 
 Google Sheets is a human-readable export layer.
 
+The worksheet name and export column order are repo-configured in:
+
+`config/pipeline_config.json`
+
 Columns
 
 vendor_name  
 website  
+source  
 mission  
 usp  
 icp  
@@ -527,6 +612,9 @@ customers
 value_statements  
 confidence  
 evidence_urls  
+directory_fit  
+directory_category  
+include_in_directory  
 
 Python authenticates using a service account.
 
@@ -538,7 +626,7 @@ Every Monday the system summarises vendors discovered in the past week.
 
 Process
 
-Query vendors where first_seen >= current_date - 7  
+Query vendors using the configured digest lookback window from `config/scheduler.toml`  
 Flatten lifecycle_stages array  
 Group vendors by stage  
 Post grouped digest to Slack  

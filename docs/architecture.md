@@ -3,11 +3,11 @@
 This repository implements the pipeline described in `docs/product_design.md`. The core unit of analysis is the vendor, not individual web pages. Python owns all orchestration, scheduling, and business logic. Apify is used exclusively as a crawling utility called on instruction from Python.
 
 The target architecture introduces a dual extraction model:
-Level 1 deterministic extraction and Level 2 LLM extraction using a ChatGPT model.
+Level 1 deterministic extraction and Level 2 LLM extraction using the OpenAI Responses API.
 
 Current implementation status:
-the active code path in this repo is deterministic-first and currently runs only Level 1 extraction.
-Level 2 and merge logic remain planned, not active.
+the active code path in this repo is deterministic-first and runs Level 1 extraction
+plus an active optional Level 2 LLM extraction pass with deterministic fallback.
 
 ---
 
@@ -23,9 +23,16 @@ Vendor Intelligence Extraction
 Vendor Profile Builder  
 Dataset Export  
 
+The active crawl model is split into two phases:
+
+Phase 1 discovery crawl  
+Phase 2 vendor enrichment crawl  
+
 services/discovery/
 
 Instructs Apify to crawl discovery sources and returns normalised vendor candidates to the orchestrator.
+
+Phase 1 returns candidate-domain records which are deduplicated, status-tracked, and queued for enrichment before any homepage fetching begins.
 
 Contains `apify_sources.py` with four functions:
 
@@ -52,6 +59,20 @@ website
 raw_description  
 source  
 
+Discovery candidate record schema:
+
+candidate_domain  
+candidate_title  
+candidate_description  
+source_query  
+source_engine  
+source_rank  
+discovered_at  
+candidate_status  
+status  
+discovery_notes  
+drop_reason  
+
 ---
 
 services/enrichment/
@@ -61,7 +82,7 @@ Fetches vendor homepage content and explores high-signal vendor pages using Pyth
 Responsibilities:
 
 - Fetch homepage HTML
-- Explore up to 5 high-signal pages per vendor
+- Explore the configured set of high-signal pages per vendor
 - Skip unreachable pages safely
 - Return structured page payloads ready for extraction
 
@@ -69,18 +90,18 @@ Apify is not used for enrichment.
 
 site_explorer.py
 
-Discovers high-signal vendor pages such as pricing, product, case studies, about, and security.
-Exploration stays on the vendor domain, caps at 5 total pages per vendor including the homepage, and skips unreachable pages safely.
+Discovers and fetches a bounded set of high-signal vendor pages such as pricing, product, case studies, security, about, and integrations.
+Exploration stays on the vendor domain, uses the limits and page patterns from `config/pipeline_config.json`, skips obvious junk pages, and returns a structured page bundle with named pages plus `extra_pages` when useful.
 
 ---
 
 services/extraction/
 
-Currently implements the deterministic extraction layer.
+Implements the deterministic extraction layer plus the active optional LLM enrichment layer.
 
 page_text_extractor.py
 
-Extracts clean visible text from HTML while removing scripts, navigation blocks, and footer noise.
+Extracts clean visible text from HTML while removing scripts, navigation blocks, footer noise, and cookie-banner style chrome. Supports deterministic truncation when callers need bounded text.
 
 vendor_intel.py
 
@@ -105,12 +126,19 @@ This extractor guarantees structured output even if LLM extraction fails.
 vendor_profile_builder.py
 
 Merges discovery metadata, explored pages, and extracted intelligence into a single `VendorIntelligence` record ready for export.
+This layer also applies deterministic directory relevance scoring:
 
-llm_extractor.py (planned)
+directory_fit = high | medium | low  
+directory_category = cs_core | cs_adjacent | support_only | generic_cx | infra  
+include_in_directory = bool  
 
-Level 2 semantic extraction using a ChatGPT model.
+llm_extractor.py
 
-Python sends homepage text to the OpenAI API and receives structured JSON containing richer commercial intelligence including:
+Level 2 semantic extraction using the OpenAI Responses API.
+
+Runtime settings such as enable flag, default model, request timeout, and payload bounds are loaded from `config/pipeline_config.json`.
+
+Python sends vendor website text to the OpenAI API and receives structured JSON containing richer commercial intelligence including:
 
 mission  
 unique selling proposition  
@@ -121,11 +149,12 @@ SOC2 mentions
 founded information  
 confidence score  
 
-merge_results.py (planned)
+merge_results.py
 
 Combines the deterministic extraction results and the LLM extraction results into a single `VendorIntelligence` object.
 
 If the LLM call fails, deterministic results are still used.
+LLM output is used to fill gaps or add richer signals, but it does not replace stronger deterministic signals with empty or weaker values.
 
 Vendors where:
 
@@ -197,10 +226,13 @@ google_sheets.py
 
 Appends new vendor rows to the Google Sheet used for browsing the vendor landscape.
 
+Worksheet name and export column order are loaded from `config/pipeline_config.json`.
+
 Current export columns:
 
 vendor_name  
 website  
+source  
 mission  
 usp  
 icp  
@@ -215,6 +247,9 @@ customers
 value_statements  
 confidence  
 evidence_urls  
+directory_fit  
+directory_category  
+include_in_directory  
 
 slack.py
 
@@ -228,16 +263,20 @@ orchestrator.py
 
 Runs the end-to-end flow:
 
-discovery  
+Phase 1 discovery crawl  
 candidate normalisation  
 domain deduplication  
-Supabase deduplication check  
+queue accepted domains for enrichment  
+Phase 2 vendor enrichment crawl  
 homepage enrichment  
 website exploration  
 page text extraction  
 deterministic extraction  
+LLM extraction  
+merge results  
 vendor profile building  
 lifecycle classification  
+drop low-confidence or non-relevant vendors  
 persistence  
 Google Sheets export
 
@@ -247,8 +286,8 @@ APScheduler entry point.
 
 Runs:
 
-run_discovery() daily at 07:00 UTC  
-run_digest() Monday at 08:00 UTC
+run_discovery() on the schedule configured in `config/scheduler.toml`  
+run_digest() on the schedule configured in `config/scheduler.toml`
 
 ---
 
@@ -300,39 +339,45 @@ python -m services.pipeline.scheduler --run-now digest
 
 # Current Pipeline Flow
 
-1. Python scheduler fires at 07:00 UTC and calls `orchestrator.run_discovery()`.
+1. Python scheduler fires using the configured discovery schedule and calls `orchestrator.run_discovery()`.
 
 2. The orchestrator calls each discovery source in `services/discovery/apify_sources.py`, which instructs Apify to crawl and returns candidate vendors.
 
-3. Candidates are normalised and deduplicated by domain within the batch.
+3. Candidate records are normalised and deduplicated by domain within the batch.
 
-4. Each candidate website is checked against Supabase using `is_known_vendor(website)`. Known vendors are skipped.
+4. Each candidate website is checked against Supabase using `is_known_vendor(website)`. Known vendors are marked as already enriched and skipped from the Phase 2 queue.
 
-5. Each new vendor homepage is fetched via `fetch_vendor_homepage()`.
+5. Each queued vendor domain enters Phase 2 and the homepage is fetched via `fetch_vendor_homepage()`.
 
-6. Site exploration discovers up to 5 high-signal pages for each vendor.
+6. Site exploration discovers and fetches a bounded set of high-signal pages for each vendor.
 
-7. Clean visible text is extracted from homepage and explored pages.
+7. Clean visible text is extracted from homepage and explored pages into a small page bundle for downstream extraction.
 
 8. Deterministic extraction runs via `vendor_intel.py`.
 
-9. The extracted signals are merged into one `VendorIntelligence` profile.
+9. Optional LLM enrichment runs when enabled in config.
 
-10. Lifecycle stages are assigned deterministically inside the extraction layer.
+10. Deterministic and LLM signals are merged into one `VendorIntelligence` profile.
 
-11. Each vendor object is persisted via `upsert_vendor()`.
+11. Directory relevance scoring assigns fit, category, and include/exclude decisions.
 
-12. Each vendor row is appended to Google Sheets.
+12. Lifecycle stages remain deterministic and are preserved in the enriched profile.
 
-13. On Monday at 08:00 UTC, `run_digest()` queries vendors added in the past week and posts a Slack digest grouped by lifecycle stage.
+13. Each vendor object is persisted via `upsert_vendor()`.
 
-14. Vendors included in the digest have `is_new = FALSE`.
+14. Each vendor row is appended to Google Sheets.
+
+15. `run_digest()` queries vendors using the configured lookback window and posts a Slack digest grouped by lifecycle stage.
+
+16. Vendors included in the digest have `is_new = FALSE`.
 
 ---
 
 # Apify Integration Notes
 
 Apify is used exclusively as a crawling utility.
+
+The Google Search actor, query list, crawl depth, result-filter heuristics, enrichment page rules, LLM runtime knobs, directory relevance hints, and Google Sheets export columns are loaded from `config/pipeline_config.json`.
 
 Apify does not:
 
@@ -444,10 +489,15 @@ Homepage enrichment uses Python requests.
 Extraction is currently deterministic-first:
 
 Level 1 deterministic rules  
-Level 2 ChatGPT semantic extraction (planned)
+Level 2 OpenAI semantic extraction with deterministic fallback
 
 Lifecycle classification is deterministic and handled by Python.
 
 Supabase is the canonical datastore.
 
 Google Sheets is a human-readable export layer.
+
+Repo-level config files currently used by the running system:
+
+`config/pipeline_config.json`  
+`config/scheduler.toml`  

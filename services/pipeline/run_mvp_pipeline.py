@@ -14,8 +14,8 @@ from services.persistence import supabase_client
 from services.pipeline import orchestrator
 
 
-def run_mvp_pipeline(query: str) -> list[dict[str, str]]:
-    """Run the MVP vendor intelligence pipeline for a search query."""
+def run_mvp_pipeline(query: str | list[str] | None = None) -> list[dict[str, str]]:
+    """Run the MVP vendor intelligence pipeline for one or more search queries."""
     vendor_exists_fn = None
     upsert_vendor_result_fn = None
 
@@ -25,7 +25,7 @@ def run_mvp_pipeline(query: str) -> list[dict[str, str]]:
 
     return orchestrator.run_mvp_pipeline(
         query,
-        search_web_fn=web_search.search_web,
+        search_web_candidates_fn=web_search.search_web_candidates,
         fetch_vendor_homepage_fn=vendor_fetcher.fetch_vendor_homepage,
         explore_vendor_site_fn=site_explorer.explore_vendor_site,
         extract_vendor_intelligence_fn=vendor_intel.extract_vendor_intelligence,

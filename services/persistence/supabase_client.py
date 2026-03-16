@@ -66,7 +66,7 @@ def upsert_vendor_result(
     intelligence: VendorIntelligence,
     client: "Client | None" = None,
 ) -> dict[str, Any]:
-    """Upsert a vendor result into cs_vendors using website as the conflict key."""
+    """Upsert a Phase 2 enriched vendor profile into cs_vendors using website as the conflict key."""
     supabase = client or get_supabase_client()
     row = build_vendor_row(vendor, homepage_payload, intelligence)
     supabase.table("cs_vendors").upsert(row, on_conflict="website").execute()
@@ -94,21 +94,28 @@ def build_vendor_row(
     homepage_payload: dict[str, str | int],
     intelligence: VendorIntelligence,
 ) -> dict[str, Any]:
-    """Build a cs_vendors row payload from pipeline data."""
+    """Build a cs_vendors row payload from an enriched vendor profile."""
     text = str(homepage_payload.get("text", "")).strip()
-    raw_description = text or vendor.get("raw_description")
+    raw_description = text or vendor.get("raw_description") or vendor.get("candidate_description")
 
     return {
         "name": intelligence.vendor_name,
         "website": intelligence.website,
         "source": vendor.get("source"),
-        "mission": _extract_mission(raw_description or ""),
-        "usp": intelligence.value_statements[0] if intelligence.value_statements else None,
+        "confidence": intelligence.confidence or None,
+        "mission": intelligence.mission or _extract_mission(raw_description or ""),
+        "usp": intelligence.usp or (intelligence.value_statements[0] if intelligence.value_statements else None),
         "pricing": "|".join(intelligence.pricing) if intelligence.pricing else None,
-        "free_trial": True if "free trial" in raw_description.lower() else None,
-        "soc2": True if "soc 2" in raw_description.lower() or "soc2" in raw_description.lower() else None,
-        "founded": None,
-        "use_cases": intelligence.icp,
+        "free_trial": intelligence.free_trial if intelligence.free_trial is not None else _detect_text_boolean(
+            raw_description or "",
+            ["free trial"],
+        ),
+        "soc2": intelligence.soc2 if intelligence.soc2 is not None else _detect_text_boolean(
+            raw_description or "",
+            ["soc 2", "soc2"],
+        ),
+        "founded": intelligence.founded or None,
+        "use_cases": intelligence.use_cases,
         "lifecycle_stages": intelligence.lifecycle_stages,
         "raw_description": raw_description or None,
         "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -128,3 +135,10 @@ def _extract_mission(text: str) -> str | None:
             return mission or None
 
     return normalized_text or None
+
+
+def _detect_text_boolean(text: str, phrases: list[str]) -> bool | None:
+    lowered_text = text.lower()
+    if any(phrase in lowered_text for phrase in phrases):
+        return True
+    return None
