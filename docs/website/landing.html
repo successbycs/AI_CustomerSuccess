@@ -1,311 +1,396 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CS AI Vendor Directory — SuccessByCS</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'DM Sans', sans-serif; background: #FAFAF7; color: #1a1a18; }
-
-  /* ── LANDING ── */
-  #landing {
-    min-height: 100vh;
-    background: #FAFAF7;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem 1.5rem;
-    text-align: center;
-  }
-  .logo-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #fff;
-    border: 0.5px solid #d3d1c7;
-    border-radius: 99px;
-    padding: 6px 16px;
-    font-size: 13px;
-    color: #5f5e5a;
-    margin-bottom: 2rem;
-    font-weight: 500;
-  }
-  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: #2E7D52; display: inline-block; }
-  .logo-dot.blue { background: #2C5F9E; }
-  .hero-title {
-    font-family: 'Playfair Display', Georgia, serif;
-    font-size: clamp(2.2rem, 5vw, 3.6rem);
-    font-weight: 700;
-    color: #1a1a18;
-    line-height: 1.15;
-    max-width: 680px;
-    margin-bottom: 1.25rem;
-  }
-  .hero-title em { font-style: normal; color: #2E7D52; }
-  .hero-sub {
-    font-size: 1.05rem;
-    color: #5f5e5a;
-    max-width: 520px;
-    line-height: 1.7;
-    margin-bottom: 2.5rem;
-  }
-  .gate-form {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-    width: 100%;
-    max-width: 520px;
-    margin-bottom: 1rem;
-  }
-  .gate-form input {
-    flex: 1;
-    min-width: 220px;
-    padding: 0 1rem;
-    height: 48px;
-    border: 0.5px solid #b4b2a9;
-    border-radius: 8px;
-    font-size: 15px;
-    background: #fff;
-    color: #1a1a18;
-    outline: none;
-  }
-  .gate-form input:focus { border-color: #2E7D52; box-shadow: 0 0 0 3px rgba(46,125,82,0.12); }
-  .gate-btn {
-    height: 48px;
-    padding: 0 1.5rem;
-    background: #2E7D52;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s;
-  }
-  .gate-btn:hover { background: #245f3f; }
-  .gate-note { font-size: 12px; color: #888780; margin-bottom: 2.5rem; }
-  .stats { display: flex; gap: 2.5rem; justify-content: center; flex-wrap: wrap; }
-  .stat-item { text-align: center; }
-  .stat-num { font-family: 'Playfair Display', Georgia, serif; font-size: 2.2rem; font-weight: 700; color: #2C5F9E; }
-  .stat-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #888780; margin-top: 2px; }
-
-  /* ── DIRECTORY ── */
-  #directory { display: none; background: #FAFAF7; min-height: 100vh; padding: 2rem 1.5rem 4rem; }
-  .dir-header { text-align: center; margin-bottom: 2rem; }
-  .dir-title { font-family: 'Playfair Display', Georgia, serif; font-size: 2rem; font-weight: 700; color: #1a1a18; margin-bottom: 0.4rem; }
-  .dir-sub { font-size: 14px; color: #888780; }
-  .lifecycle-nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 1.5rem; }
-  .lc-btn {
-    padding: 6px 14px;
-    border-radius: 99px;
-    border: 0.5px solid #b4b2a9;
-    background: #fff;
-    color: #5f5e5a;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.12s;
-  }
-  .lc-btn:hover { border-color: #2E7D52; color: #2E7D52; }
-  .lc-btn.active { background: #2E7D52; color: #fff; border-color: #2E7D52; font-weight: 500; }
-  .search-bar { display: flex; max-width: 400px; margin: 0 auto 2rem; }
-  .search-bar input {
-    width: 100%;
-    padding: 0 1rem;
-    height: 40px;
-    border: 0.5px solid #b4b2a9;
-    border-radius: 8px;
-    font-size: 14px;
-    background: #fff;
-    color: #1a1a18;
-    outline: none;
-  }
-  .search-bar input:focus { border-color: #2C5F9E; box-shadow: 0 0 0 3px rgba(44,95,158,0.1); }
-  .count-label { text-align: center; font-size: 13px; color: #888780; margin-bottom: 1.5rem; }
-  .vendor-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-  .vendor-card {
-    background: #fff;
-    border: 0.5px solid #d3d1c7;
-    border-radius: 12px;
-    padding: 1.25rem;
-    transition: border-color 0.15s;
-    cursor: pointer;
-  }
-  .vendor-card:hover { border-color: #2E7D52; }
-  .vc-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.75rem; gap: 8px; }
-  .vc-name { font-weight: 500; font-size: 15px; color: #1a1a18; line-height: 1.3; }
-  .vc-website { font-size: 11px; color: #2C5F9E; text-decoration: none; white-space: nowrap; margin-top: 2px; }
-  .vc-website:hover { text-decoration: underline; }
-  .vc-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.75rem; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; }
-  .badge-trial { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #c0dd97; }
-  .badge-soc2 { background: #E6F1FB; color: #185FA5; border: 0.5px solid #b5d4f4; }
-  .vc-mission { font-size: 13px; color: #5f5e5a; line-height: 1.55; margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .uc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-  .uc-tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #f1efe8; color: #5f5e5a; border: 0.5px solid #d3d1c7; }
-  .vc-expanded { display: none; margin-top: 1rem; border-top: 0.5px solid #d3d1c7; padding-top: 1rem; }
-  .vc-expanded.open { display: block; }
-  .vc-usp { font-size: 13px; color: #444441; line-height: 1.6; margin-bottom: 0.75rem; white-space: pre-line; }
-  .vc-meta { font-size: 12px; color: #888780; line-height: 1.8; }
-  .vc-meta strong { color: #5f5e5a; }
-  .no-results { text-align: center; padding: 3rem; color: #888780; font-size: 15px; }
-  @media (max-width: 480px) {
-    .gate-form { flex-direction: column; }
-    .vendor-grid { grid-template-columns: 1fr; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Success Technology Directory | SuccessByCS</title>
+  <meta
+    name="description"
+    content="A curated Customer Success software directory organized by lifecycle stage, with practical intelligence on ICP, use cases, pricing signals, proof points, and fit."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="./landing.css">
 </head>
 <body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">
+          <strong>SuccessByCS</strong>
+          <span>Directory</span>
+        </span>
+      </a>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#why">Why it exists</a>
+        <a href="#lifecycle">Lifecycle</a>
+        <a href="#examples">Example profiles</a>
+        <a href="#how-it-works">How it works</a>
+      </nav>
+    </header>
 
-<div id="landing">
-  <div class="logo-badge">
-    <span class="logo-dot"></span>
-    SuccessByCS
-    <span class="logo-dot blue"></span>
-  </div>
-  <h1 class="hero-title">AI Directory for<br><em>Customer Success</em></h1>
-  <p class="hero-sub">49 AI vendors mapped across the CS lifecycle — Sign, Onboard, Activate, Adopt, Expand, Renew, Advocate — so you can identify the tools leaking your SaaS revenue.</p>
-  <div class="gate-form">
-    <input type="email" id="emailInput" placeholder="your@email.com" />
-    <button class="gate-btn" onclick="handleAccess()">Get Instant Access →</button>
-  </div>
-  <p class="gate-note">Free access. No spam. Unsubscribe anytime.</p>
-  <div class="stats">
-    <div class="stat-item"><div class="stat-num">49</div><div class="stat-label">Startups</div></div>
-    <div class="stat-item"><div class="stat-num">20+</div><div class="stat-label">Use Cases</div></div>
-    <div class="stat-item"><div class="stat-num">Free</div><div class="stat-label">Download</div></div>
-  </div>
-</div>
-
-<div id="directory">
-  <div class="dir-header">
-    <div class="logo-badge" style="display:inline-flex;">
-      <span class="logo-dot"></span> SuccessByCS AI Directory <span class="logo-dot blue"></span>
-    </div>
-    <h2 class="dir-title">CS AI Vendor Landscape</h2>
-    <p class="dir-sub">Filter by lifecycle stage — click any card to expand</p>
-  </div>
-  <div class="lifecycle-nav" id="lcNav"></div>
-  <div class="search-bar"><input type="text" id="searchInput" placeholder="Search vendors, use cases..." oninput="renderCards()" /></div>
-  <p class="count-label" id="countLabel"></p>
-  <div class="vendor-grid" id="vendorGrid"></div>
-</div>
-
-<script>
-const VENDORS = [{"name":"UpdateAI [Acquired by Gainsight]","website":"https://update.ai/","use_cases":["Conversational Intelligence","AI Notetaker","Voice of Customer Insights"],"mission":"UpdateAI helps teams unlock customer needs in every meeting to help them grow revenues, lower churn, and maximize product insight.","usp":"Top reasons revenue leaders use UpdateAI:\n\n1. Incomplete handoff between Sales and Onboarding and CS\n2. CSMs/AEs miss critical risk and opportunity signals\n3. Teams do not consistently capture the customer needs\n4. Call notes are not added to the CRM\n5. VoC feedback is not prioritized by Product nor Execs","founded":"2020, Los Angeles","pricing":"Per seat","free_trial":true,"soc2":true},{"name":"Tingono","website":"https://tingono.ai/","use_cases":["Customer Sentiment","Health Scoring","Revenue Intelligence"],"mission":"Maximize NRR with AI Agents","usp":"Tingono makes it effortless to maximize your NRR. Tara, our AI-powered CSM, generates tailored success plans, forecasts churn risks and upsell opportunities, prioritizes high-impact accounts, and takes proactive actions to drive renewals, expansions, and long-term revenue growth.","founded":"San Francisco, 2021","pricing":"Platform + Products","free_trial":true,"soc2":true},{"name":"Sturdy","website":"https://www.sturdy.ai/","use_cases":["Conversational Intelligence","Revenue Intelligence"],"mission":"Empower businesses to unlock the full potential of their customer data by transforming unstructured conversations into actionable insights.","usp":"Unlocks actionable insights from unstructured customer conversations across all platforms, enabling businesses to proactively identify risks, opportunities, and trends that directly impact revenue.","founded":"2020, United States","pricing":"Consumption-based","free_trial":true,"soc2":true},{"name":"Rocketlane","website":"https://rocketlane.com/","use_cases":["Onboarding and Implementation","PSA"],"mission":"Help post-sale teams deliver projects on time and within budget, always keeping customers at the heart of the delivery process.","usp":"Manage projects, resources, time, and clients in one place. Best-in-class templates. Exceptional client portal. AI-powered day-to-day workflows.","founded":"2020, United States","pricing":"See website","free_trial":true,"soc2":true},{"name":"OnRamp","website":"https://onramp.us/","use_cases":["Onboarding"],"mission":"Make customer onboarding seamless, efficient, and scalable helping businesses reduce friction and get customers to value faster.","usp":"Simplifies complex onboarding processes into an easy-to-use, customer-facing portal.","founded":"2019, Boston","pricing":"Platform fee + seat licenses","free_trial":false,"soc2":true},{"name":"Lumopath","website":"https://www.lumopath.ai/","use_cases":["Resource Planning"],"mission":"Transform how businesses manage time and resources.","usp":"Resource planning tool that aggregates data from all your business tools and automatically measures the true effort that goes into supporting customers.","founded":"2022, Los Angeles","pricing":"Per employee count","free_trial":false,"soc2":true},{"name":"RevSetter","website":"https://revsetter.com/","use_cases":["Customer Sentiment","Customer Support","Health Scoring","Onboarding","Revenue Intelligence"],"mission":"Help CS and GTM professionals 10x efficiency with AI-powered workflows.","usp":"The first Full-Suite, AI-powered Free-to-Enterprise CS platform available to anyone working in any vertical.","founded":"2022, Santa Monica","pricing":"Free to Enterprise","free_trial":true,"soc2":true},{"name":"Rupert","website":"https://www.hirupert.co/","use_cases":["Signal-to-Playbook"],"mission":"Empower CS teams to proactively navigate every account-level risk and opportunity.","usp":"GenAI signal-to-playbook solution that enables distribution of predictive, timely, personalized, actionable account-level signals for upsell, churn risks, and user activation.","founded":"2020, NYC","pricing":"Usage-based","free_trial":true,"soc2":true},{"name":"Peerbound","website":"https://peerbound.com/","use_cases":["Content Creation","Customer Sentiment","Marketing Intelligence"],"mission":"Help companies win their markets by unlocking and amplifying the voices of their customers.","usp":"Find hidden customer advocates, create beautiful on-brand customer proof collateral, and deliver relevant collateral to your Sales team everywhere they work.","founded":"2023, NYC","pricing":"Utilization-based","free_trial":true,"soc2":true},{"name":"HexusAI","website":"https://www.hexus.ai/","use_cases":["Content Creation","Conversational Intelligence","Marketing Intelligence","Onboarding"],"mission":"Enable all GTM teams to become product advocates by helping them go from concept to launch faster.","usp":"Create stunning demos, videos, guides, and more from one collaborative, intelligent platform.","founded":"2023, San Francisco","pricing":"Seat, SaaS Subscription","free_trial":true,"soc2":true},{"name":"Statisfy","website":"https://www.statisfy.com/","use_cases":["Conversational Intelligence","Customer Sentiment","Health Scoring"],"mission":"Building the World's First AI Customer Specialist for B2B Organizations.","usp":"Only AI Native Customer Success Platform. AI Agents Automate Work that Creates Healthy, Growing Customers.","founded":"2023, San Francisco Bay Area","pricing":"Based on # of Customers and ACV","free_trial":true,"soc2":true},{"name":"Sendspark","website":"https://sendspark.com/","use_cases":["Customer Education","Revenue Growth"],"mission":"Make personalized videos at scale.","usp":"Powerful video prospecting platform that personalizes and delivers video at scale. Record once, auto-generate thousands of personalized videos.","founded":"2019, San Antonio","pricing":"Seats + Usage","free_trial":true,"soc2":false},{"name":"StaircaseAI","website":"https://staircase.ai/","use_cases":["Customer Sentiment","Revenue Intelligence"],"mission":"Pioneering Customer Intelligence. Analyze millions of customer signals and turn them into actionable insights.","usp":"Integrates advanced AI with human insight to deliver unparalleled customer intelligence results.","founded":"N/A","pricing":"N/A","free_trial":false,"soc2":false},{"name":"Thena","website":"https://www.thena.ai/","use_cases":["Customer Support"],"mission":"Support and grow customers across any channel or platform.","usp":"AI B2B support and CS platform that automates creation and management of tickets across platforms.","founded":"2022, San Francisco","pricing":"Usage-based","free_trial":true,"soc2":true},{"name":"Matik","website":"https://www.matik.io/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","QBR/Value Story","CS Ops/Automation","Reporting/BI","AI Copilot/Agent","Customer Communication","Revenue Growth","Revenue Intelligence","Content Generation"],"mission":"Automate the creation of presentations, documents, and reports directly from your data, powered by AI you can trust.","usp":"AI-powered automation guided by if-then logic and proven best practices. Consistent, accurate, aligned, insight-rich content every team member can self-serve.","founded":"2019, San Francisco","pricing":"Tiered","free_trial":true,"soc2":true},{"name":"unthread","website":"https://unthread.io/","use_cases":["Customer Support"],"mission":"Make conversational support scalable and enjoyable.","usp":"AI Ticketing in Slack: automatically tracks conversations as tickets and uses AI to prioritize, assign, and resolve instantly.","founded":"N/A","pricing":"Team size + connected channels","free_trial":true,"soc2":true},{"name":"Reef","website":"https://www.reef.ai/","use_cases":["Customer Sentiment","Health Scoring","Revenue Intelligence"],"mission":"Combining the best of human and artificial intelligence so individuals perform, customers grow, and companies thrive.","usp":"AI-powered customer data, scoring, and recommendation platform. Machine learning delivers Outcome-Based Scoring optimized for specific revenue outcomes.","founded":"2021, Honolulu","pricing":"N/A","free_trial":false,"soc2":true},{"name":"Dock","website":"https://dock.us/","use_cases":["Project Collaboration"],"mission":"A private workspace that hosts all the information shared between two parties.","usp":"Collaborative workspace between two groups of people.","founded":"N/A","pricing":"Per person, based on features","free_trial":true,"soc2":false},{"name":"Maven","website":"https://www.mavenagi.com/","use_cases":["Customer Support"],"mission":"Enterprise AI platform on a mission to unleash business AGI, starting with customer support.","usp":"Transform your customer experience with Agent Maven, a comprehensive Generative AI native solution.","founded":"2023","pricing":"N/A","free_trial":false,"soc2":true},{"name":"FunnelStory","website":"https://funnelstory.ai/","use_cases":["Customer Intelligence","Revenue Intelligence"],"mission":"Revenue platform for sales teams. Supercharges adoptions, protects revenue, and delivers instant analytics.","usp":"Leading provider of intelligent revenue solutions via Agentic AI technology delivering actionable insights and predictive analytics.","founded":"N/A","pricing":"Seats + features","free_trial":true,"soc2":true},{"name":"Centralize","website":"https://www.usecentralize.com/","use_cases":["Revenue Intelligence"],"mission":"AI-Powered Relationship Intelligence Platform for Enterprise Sales.","usp":"Automated stakeholder maps, conversation insights, and pipeline reviews in minutes. Improve win rates by up to 56%.","founded":"2023","pricing":"N/A","free_trial":false,"soc2":false},{"name":"Tada AI","website":"https://tadatoday.ai/","use_cases":["Customer Sentiment"],"mission":"Hidden exchanges in email communications hold the key to better customer relationships and business growth.","usp":"Realtime insights from your customers. Transform routine communications into powerful data for strategic decisions.","founded":"2023, Charlotte NC","pricing":"Employee count","free_trial":true,"soc2":false},{"name":"Magnify","website":"https://www.magnify.io/","use_cases":["Revenue Intelligence","Customer Sentiment"],"mission":"The new way to manage your customer lifecycle.","usp":"Uses AI to combine personalization at scale with automation across all digital touch points to reduce churn and drive revenue growth.","founded":"Seattle","pricing":"N/A","free_trial":false,"soc2":true},{"name":"Bagel","website":"https://www.getbagel.com/","use_cases":["Revenue Intelligence","Product Feedback"],"mission":"Product intelligence platform that helps companies accelerate revenue.","usp":"Strategically influence the product roadmap by tying revenue impact to product requests.","founded":"N/A","pricing":"N/A","free_trial":false,"soc2":false},{"name":"Intelo","website":"https://www.intelo.ai/","use_cases":["Revenue Intelligence","Customer Sentiment"],"mission":"AI-powered agents tailored for Customer Success, Sales, and Planning, empowering businesses to unlock value from their data.","usp":"Prioritizes outcomes, CSQL, risk management, and engagement, eliminating guesswork from tasks that AI handles efficiently.","founded":"2022, San Francisco","pricing":"Number of AI Agents","free_trial":true,"soc2":false},{"name":"BackEngine","website":"https://www.backengine.com/","use_cases":["Revenue Intelligence","Customer Sentiment"],"mission":"Help B2B businesses increase Net Revenue Retention.","usp":"Analyzes every customer call, email, and message to ensure everyone from front-line teams to the C-suite is in the business of retaining and expanding customers.","founded":"2023","pricing":"N/A","free_trial":false,"soc2":true},{"name":"Syncly","website":"https://syncly.app/","use_cases":["Customer Sentiment"],"mission":"Customer feedback analysis platform for the Customer Experience, Support, and Product teams.","usp":"Centralize all customer feedback, instantly categorize and reveal underlying drivers of negative customer experience to minimize churn.","founded":"2022","pricing":"N/A","free_trial":false,"soc2":true},{"name":"Daydream","website":"https://daydream.co/","use_cases":["Revenue Intelligence"],"mission":"AI-powered data tool for hitting ambitious revenue goals.","usp":"Connect all your tools and generate reports in 1 click. AI scans CRM data, marketing touches, call transcripts, product usage, and the internet to find insights.","founded":"2020, San Francisco","pricing":"N/A","free_trial":true,"soc2":false},{"name":"Foresight","website":"https://gainforesight.co/","use_cases":["Revenue Intelligence","Content Creation","Customer Sentiment"],"mission":"Help CROs and Post-Sales revenue leaders quantifiably measure Customer Outcomes and Value to expand Revenue.","usp":"Onboard and deliver value in under 1 week. Integrates with Salesforce and HubSpot. Price based on value, not seats or licenses.","founded":"2021, Nashville","pricing":"Subscription","free_trial":true,"soc2":false},{"name":"Quack","website":"https://www.quack.ai/","use_cases":["Customer Support"],"mission":"All-in-one solution for customer support delivering precise, automated resolutions powered by your data.","usp":"Analyzes every ticket, recognizes patterns, gathers product insights, automates processes, and provides a 5-star customer experience.","founded":"2023, San Francisco","pricing":"N/A","free_trial":false,"soc2":true},{"name":"Handoffs","website":"https://www.handoffs.com/","use_cases":["Conversational Intelligence"],"mission":"Surface the most relevant information at the right time to drive delightful interactions and positive outcomes.","usp":"Comprehensive summary of customer interactions through call and email data, empowering businesses to make informed decisions about customer experience.","founded":"2022, San Francisco","pricing":"Number of summaries + integrations","free_trial":true,"soc2":true},{"name":"TheySaid","website":"https://www.theysaid.io/","use_cases":["Customer Sentiment"],"mission":"Asking the right question, to the right decision-maker, at the right moment leads to exceptional business outcomes.","usp":"Conversational AI Surveys to gain deeper customer insights. Engages customers throughout their journey to uncover actionable insights to grow revenue.","founded":"2023, Salt Lake City","pricing":"Number of active surveys + responses","free_trial":true,"soc2":true},{"name":"Klynk","website":"https://www.klynk.ai/","use_cases":["Customer Sentiment","Content Creation"],"mission":"AI-powered insights combined with human expertise for unparalleled customer success.","usp":"B2B managed customer success services with dedicated professionals. AI-driven insights, predictive analytics, and skilled CSM experts.","founded":"2023, San Mateo","pricing":"N/A","free_trial":false,"soc2":false},{"name":"Userlens","website":"https://userlens.io/","use_cases":["Onboarding","Adoption","Renewal","Health Scoring","Churn/Risk","Forecasting","QBR/Value Story","CS Ops/Automation","Reporting/BI","Customer Sentiment"],"mission":"Automate churn prediction through analyzing product adoption.","usp":"Focuses on quantitative usage data which shows true behavior and is the best predictor of churn rather than qualitative data alone.","founded":"2024, Helsinki","pricing":"Usage-based, Tiered, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"Ambral","website":"https://ambral.com/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Churn/Risk","QBR/Value Story","AI Copilot/Agent","Revenue Intelligence"],"mission":"AI Account Manager for every customer.","usp":"Automate manual workflows, proactive outreach via Voice AI agents, flag churn risks and expansion opportunities with Ambral Cortex.","founded":"2025, NYC (YCombinator S25)","pricing":"Usage-based","free_trial":true,"soc2":true},{"name":"Lucidly","website":"https://www.lucidlyhq.com/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","QBR/Value Story","CS Ops/Automation","Reporting/BI","AI Copilot/Agent","Customer Communication","Customer Education","Customer Sentiment","Revenue Growth","Revenue Intelligence","Customer Support","Content Generation","Customer Success Platform","Project Collaboration"],"mission":"Help post-sale teams drive predictable revenue growth through AI and data intelligence.","usp":"First warehouse-native Customer Intelligence Platform. Connects directly to Snowflake, Redshift, BigQuery, or Databricks. Real-time, governed intelligence without duplication or lag.","founded":"2024, San Francisco","pricing":"Usage-based, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"GUIDEcx","website":"https://guidecx.com/","use_cases":["Onboarding","Adoption","Churn/Risk","Forecasting","AI Copilot/Agent","Customer Communication","Project Collaboration"],"mission":"Remove friction and increase engagement in new customer onboarding, turning new customers into lifelong customers.","usp":"First customer onboarding platform purpose-built for faster, more predictable implementations at scale.","founded":"2017, Lehi, UT","pricing":"Seat-based, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"Sparkl Inc","website":"https://www.sparkl.one/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Health Scoring","Churn/Risk","QBR/Value Story","Reporting/BI","AI Copilot/Agent","Customer Communication"],"mission":"Provide CS teams with an always-on AI data analyst that instantly answers customer data questions.","usp":"Eliminate extra cost and tech resources with built-in product analytics. Instant contextual insights through a conversational interface optimized with your company context.","founded":"2024, Los Altos","pricing":"Free Trial, Tiered","free_trial":true,"soc2":false},{"name":"Calyb AI","website":"https://www.calyb.ai/","use_cases":["Onboarding","Adoption","AI Copilot/Agent","Customer Education","Customer Support"],"mission":"Automating Onboarding, Adoption and Outcomes for SaaS Products.","usp":"Learns any product with just a link. Enables 10+ agents working visibly and invisibly to get users to outcome, self-learns with each user.","founded":"2024, Bangalore/SFO","pricing":"Usage-based, Tiered","free_trial":true,"soc2":true},{"name":"Formata","website":"https://formata.io/","use_cases":["Renewal","Expansion","Churn/Risk","CS Ops/Automation","AI Copilot/Agent","Customer Sentiment","Revenue Intelligence"],"mission":"Empower customer success teams with reliable customer data to foster better relationships and increase retention.","usp":"Works off unstructured data sources with AI at its core to accurately analyze customer sentiment and predict churn. AI agents alert you proactively within Slack.","founded":"2025, Boulder","pricing":"Free Trial, Seat-based, Custom/Enterprise","free_trial":true,"soc2":false},{"name":"Survicate","website":"https://survicate.com/","use_cases":["Onboarding","Adoption","Churn/Risk","Customer Sentiment"],"mission":"Transform scattered customer feedback into clear, actionable intelligence that helps teams build better products and improve customer experiences.","usp":"Only platform that closes the complete feedback loop, from multi-channel collection to AI-powered analysis with 50+ native integrations.","founded":"2014, Warsaw","pricing":"Free, Usage-based, Tiered, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"Cust","website":"https://cust.co/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","QBR/Value Story","CS Ops/Automation","Reporting/BI","AI Copilot/Agent","Customer Communication","Customer Sentiment","Revenue Growth","Revenue Intelligence","Customer Support","Content Generation","Customer Success Platform"],"mission":"AGI for Proactive Customer Management.","usp":"Deploy a fleet of specialized agents using simple natural language. Each scoped with specific context and permissions to monitor the entire customer journey in the background.","founded":"2024, Vilnius, Lithuania","pricing":"Based on number of accounts. Unlimited CSMs.","free_trial":false,"soc2":true},{"name":"Zentesimal","website":"https://zentesimal.com/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Churn/Risk","CS Ops/Automation","AI Copilot/Agent","Customer Communication","Revenue Intelligence","Customer Support","Content Generation"],"mission":"Bring Enterprise-level customer success to every customer through AI digital workers.","usp":"Context-aware digital workers that operate in the customer existing stack and execute real operational processes end-to-end. Enterprise-level care for long-tail users, at scale.","founded":"2025, Madrid","pricing":"Custom/Enterprise","free_trial":true,"soc2":false},{"name":"Traction","website":"https://get.traction.team/","use_cases":["Expansion","Health Scoring","Churn/Risk","QBR/Value Story","CS Ops/Automation","AI Copilot/Agent","Customer Sentiment","Revenue Growth"],"mission":"Enable CS teams to stop losing accounts with perfect health scores.","usp":"Leads with qualitative insights from customer engagement combined with CRM data and product usage to get a complete view that understands intent AND helps CSMs act.","founded":"2024, Melbourne, Australia","pricing":"Free Trial, Seat-based","free_trial":true,"soc2":false},{"name":"Flowla","website":"https://www.flowla.com/","use_cases":["Onboarding","Expansion","QBR/Value Story","CS Ops/Automation","Reporting/BI","AI Copilot/Agent","Customer Communication","Customer Education","Revenue Growth","Revenue Intelligence","Project Collaboration"],"mission":"Build an outstanding and frictionless way to get deals done.","usp":"Only revenue enablement platform built to keep momentum moving between meetings. Combines buyer-facing workspaces with engagement signals and AI-assisted execution.","founded":"2022, London","pricing":"Free, Seat-based, Tiered, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"ImpactPilot","website":"https://impactpilot.io/","use_cases":["Adoption","Renewal","Churn/Risk","Forecasting","CS Ops/Automation","AI Copilot/Agent","Revenue Intelligence","Customer Success Platform"],"mission":"Give SaaS teams clear insight into the current state of their customers and enable proactive, measurable impact directly from HubSpot.","usp":"Works directly in your CRM without needing to connect additional data or use extra tools.","founded":"2024, Antwerp","pricing":"Tiered","free_trial":true,"soc2":false},{"name":"Dexkor","website":"https://dexkor.com/","use_cases":["Onboarding","Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","Reporting/BI","AI Copilot/Agent","Customer Communication","Customer Sentiment","Customer Support","Customer Success Platform","Project Collaboration"],"mission":"Empower customer-facing teams to move from reactive execution to proactive customer success using intelligent, connected, and automated workflows.","usp":"Most tools tell you what happened. DexKor tells you what to do next and helps you do it. Combines unified post-sales workflows with Agentic AI.","founded":"Dec 2024, Gurgaon, India","pricing":"Usage-based, Seat-based, Tiered, Custom/Enterprise","free_trial":true,"soc2":true},{"name":"Scratch Frameworks","website":"https://scratchframeworks.com/","use_cases":["Onboarding","Adoption","Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","CS Ops/Automation","Reporting/BI","AI Copilot/Agent","Customer Sentiment","Revenue Growth","Revenue Intelligence","Customer Success Platform"],"mission":"Predict churn before it happens and tell you exactly what to do about it. Combining behavioral science with customer data.","usp":"Only platform that uses actual behavioural science frameworks to help you understand customer decisions. Tells you customers at risk AND what to do about it.","founded":"2025, Singapore","pricing":"Free Trial, Usage-based, Tiered","free_trial":true,"soc2":false},{"name":"Panora","website":"https://panora.cx/","use_cases":["Renewal","Expansion","Health Scoring","Churn/Risk","Forecasting","Reporting/BI","AI Copilot/Agent","Customer Sentiment","Revenue Growth","Revenue Intelligence","Customer Success Platform"],"mission":"Bringing AI churn prediction and expansion opportunity detection to HubSpot.","usp":"Turns HubSpot into a post-sales growth machine.","founded":"N/A","pricing":"Tiered","free_trial":true,"soc2":false}];
-
-const LIFECYCLE_FILTERS = [
-  { label: "All", value: null },
-  { label: "Sign", value: ["Conversational Intelligence","AI Notetaker","Voice of Customer Insights","Marketing Intelligence","Revenue Intelligence"] },
-  { label: "Onboard", value: ["Onboarding","Onboarding and Implementation","PSA","Project Collaboration"] },
-  { label: "Activate", value: ["Adoption","Customer Education","Content Creation","Content Generation"] },
-  { label: "Adopt", value: ["Health Scoring","Customer Sentiment","Signal-to-Playbook","CS Ops/Automation","Reporting/BI","AI Copilot/Agent"] },
-  { label: "Expand", value: ["Expansion","Revenue Growth","QBR/Value Story"] },
-  { label: "Renew", value: ["Renewal","Churn/Risk","Forecasting","Customer Success Platform"] },
-  { label: "Advocate", value: ["Product Feedback","Customer Support","Customer Communication"] },
-];
-
-let activeFilter = null;
-let expandedCards = new Set();
-
-function handleAccess() {
-  const email = document.getElementById('emailInput').value.trim();
-  if (!email || !email.includes('@')) {
-    document.getElementById('emailInput').style.borderColor = '#e24b4a';
-    document.getElementById('emailInput').focus();
-    return;
-  }
-  document.getElementById('landing').style.display = 'none';
-  document.getElementById('directory').style.display = 'block';
-  renderNav();
-  renderCards();
-}
-
-function renderNav() {
-  const nav = document.getElementById('lcNav');
-  nav.innerHTML = LIFECYCLE_FILTERS.map((f, i) => {
-    const isActive = activeFilter === f.value;
-    return `<button class="lc-btn${isActive ? ' active' : ''}" onclick="setFilter(${i})">${f.label}</button>`;
-  }).join('');
-}
-
-function setFilter(idx) {
-  activeFilter = LIFECYCLE_FILTERS[idx].value;
-  renderNav();
-  renderCards();
-}
-
-function getFiltered() {
-  const q = (document.getElementById('searchInput') || {}).value || '';
-  const search = q.toLowerCase().trim();
-  return VENDORS.filter(v => {
-    const matchFilter = !activeFilter || v.use_cases.some(uc => activeFilter.includes(uc));
-    if (!matchFilter) return false;
-    if (!search) return true;
-    const text = (v.name + ' ' + v.mission + ' ' + v.use_cases.join(' ')).toLowerCase();
-    return text.includes(search);
-  });
-}
-
-function renderCards() {
-  const filtered = getFiltered();
-  const grid = document.getElementById('vendorGrid');
-  const countEl = document.getElementById('countLabel');
-  countEl.textContent = `${filtered.length} vendor${filtered.length !== 1 ? 's' : ''} found`;
-  if (!filtered.length) {
-    grid.innerHTML = '<div class="no-results">No vendors match your current filters.</div>';
-    return;
-  }
-  grid.innerHTML = filtered.map(v => {
-    const isOpen = expandedCards.has(v.name);
-    const website = v.website.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const href = v.website.startsWith('http') ? v.website : 'https://' + v.website;
-    return `
-    <div class="vendor-card" onclick="toggleCard('${v.name.replace(/'/g,"\\'")}', event)">
-      <div class="vc-top">
-        <div>
-          <div class="vc-name">${v.name}</div>
-          <a class="vc-website" href="${href}" target="_blank" onclick="event.stopPropagation()">${website}</a>
+    <main id="top">
+      <section class="hero section">
+        <div class="hero-copy">
+          <p class="eyebrow">Launching the public directory</p>
+          <h1>The Customer Success Technology Directory</h1>
+          <p class="hero-subheadline">
+            A curated intelligence layer for Customer Success software vendors, organized by
+            lifecycle stage and enriched with practical signals on ICP, use cases, pricing,
+            proof, and fit.
+          </p>
+          <p class="hero-supporting-copy">
+            Built for CS leaders, RevOps and CS Ops teams, consultants, and founders who need
+            a faster way to understand the post-sale technology landscape without piecing it
+            together from scattered blogs, communities, and vendor sites.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#examples">Browse example profiles</a>
+            <a class="button button-secondary" href="#cta">Get the weekly discovery digest</a>
+          </div>
+          <div class="hero-proof-strip" aria-label="Directory strengths">
+            <span>Lifecycle-first vendor mapping</span>
+            <span>Curated profile intelligence</span>
+            <span>Built for live directory data</span>
+          </div>
         </div>
-        <div style="font-size:18px;color:#b4b2a9;flex-shrink:0">${isOpen ? '▲' : '▼'}</div>
-      </div>
-      <div class="vc-badges">
-        ${v.free_trial ? '<span class="badge badge-trial">Free trial</span>' : ''}
-        ${v.soc2 ? '<span class="badge badge-soc2">SOC2</span>' : ''}
-      </div>
-      <div class="vc-mission">${v.mission}</div>
-      <div class="uc-tags">${v.use_cases.map(uc => `<span class="uc-tag">${uc}</span>`).join('')}</div>
-      <div class="vc-expanded${isOpen ? ' open' : ''}">
-        <div class="vc-usp">${v.usp}</div>
-        <div class="vc-meta">
-          <strong>Founded:</strong> ${v.founded || 'N/A'}<br>
-          <strong>Pricing:</strong> ${v.pricing || 'Contact for pricing'}
+
+        <aside class="hero-panel" aria-label="Profile preview">
+          <p class="panel-label">What each profile is designed to answer</p>
+          <div class="hero-metrics">
+            <article>
+              <strong>Where does this vendor fit?</strong>
+              <span>Mapped to the 8-stage SuccessByCS lifecycle, with support for multi-stage tools.</span>
+            </article>
+            <article>
+              <strong>Who is it for?</strong>
+              <span>Profiles are structured to show ICP signals, use cases, and evidence of practical fit.</span>
+            </article>
+            <article>
+              <strong>How credible is the signal?</strong>
+              <span>Pricing cues, customer proof, trust messaging, and supporting evidence URLs are captured.</span>
+            </article>
+            <article>
+              <strong>How is the data built?</strong>
+              <span>Vendor websites are explored and converted into structured profiles ready for search and filtering.</span>
+            </article>
+          </div>
+        </aside>
+      </section>
+
+      <section class="section why-section" id="why">
+        <div class="section-heading">
+          <p class="eyebrow">Why this exists</p>
+          <h2>A better way to evaluate Customer Success software</h2>
         </div>
+        <div class="why-grid">
+          <article class="why-card why-card-problem">
+            <h3>Most research starts with fragmented sources</h3>
+            <p>
+              Customer Success leaders often bounce between vendor sites, comparison articles,
+              community threads, and generic software lists just to assemble a view of the market.
+            </p>
+          </article>
+          <article class="why-card why-card-problem">
+            <h3>Most lists stop at names, not fit</h3>
+            <p>
+              A vendor list is not enough. Buyers need lifecycle context, ICP clues, pricing
+              signals, use cases, proof, and trust indicators to decide what deserves a closer look.
+            </p>
+          </article>
+          <article class="why-card why-card-solution">
+            <h3>This directory is a curated intelligence layer</h3>
+            <p>
+              SuccessByCS is building a searchable directory of Customer Success software vendors,
+              organized by lifecycle stage and enriched with structured signals that make the
+              market easier to scan, shortlist, and revisit.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section lifecycle" id="lifecycle">
+        <div class="section-heading">
+          <p class="eyebrow">8-stage lifecycle overview</p>
+          <h2>The directory is organized around the canonical SuccessByCS model</h2>
+        </div>
+        <div class="lifecycle-grid">
+          <article class="lifecycle-card">
+            <h3>Sign</h3>
+            <p>Capture context, conversations, and handoff signals before customer ownership fully shifts.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Onboard</h3>
+            <p>Coordinate implementation, onboarding, and time-to-value work across teams and customers.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Activate</h3>
+            <p>Help users reach first value through setup guidance, education, and in-product direction.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Adopt</h3>
+            <p>Track usage, health, and sentiment to improve engagement and ongoing product adoption.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Support</h3>
+            <p>Improve support delivery with automation, triage, agent workflows, and knowledge access.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Expand</h3>
+            <p>Surface growth opportunities, stakeholder signals, and expansion pathways inside existing accounts.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Renew</h3>
+            <p>Reduce churn risk and strengthen renewal planning with better signals, workflows, and forecasting.</p>
+          </article>
+          <article class="lifecycle-card">
+            <h3>Advocate</h3>
+            <p>Turn successful customers into proof through feedback, references, stories, and advocacy programs.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section browse">
+        <div class="section-heading">
+          <p class="eyebrow">What users can browse and filter by</p>
+          <h2>Designed for practical evaluation, not just discovery</h2>
+        </div>
+        <div class="browse-layout">
+          <div class="browse-chips" aria-label="Future filter dimensions">
+            <span>Lifecycle stage</span>
+            <span>Use case</span>
+            <span>ICP</span>
+            <span>Pricing signals</span>
+            <span>Customer proof</span>
+            <span>Security / trust signals</span>
+          </div>
+          <p class="browse-note">
+            The page structure is intentionally aligned to the future live vendor profile schema:
+            <code>vendor_name</code>, <code>website</code>, <code>mission</code>, <code>usp</code>,
+            <code>icp</code>, <code>use_cases</code>, <code>lifecycle_stages</code>, <code>pricing</code>,
+            <code>free_trial</code>, <code>soc2</code>, <code>founded</code>, <code>case_studies</code>,
+            <code>customers</code>, <code>value_statements</code>, <code>confidence</code>, and
+            <code>evidence_urls</code>.
+          </p>
+        </div>
+      </section>
+
+      <section class="section examples" id="examples">
+        <div class="section-heading">
+          <p class="eyebrow">Example vendor profiles</p>
+          <h2>Static examples of how the live directory can feel</h2>
+        </div>
+        <div class="example-grid">
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">Rocketlane</h3>
+                <p class="vendor-domain">rocketlane.com</p>
+              </div>
+              <span class="signal-pill signal-pill-green">SOC2</span>
+            </div>
+            <div class="stage-list">
+              <span>Onboard</span>
+              <span>Activate</span>
+            </div>
+            <p class="vendor-use-case">
+              Implementation and onboarding software built to coordinate customers, internal teams,
+              and time-to-value milestones.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>B2B SaaS teams with structured onboarding motions</dd></div>
+              <div><dt>Pricing</dt><dd>Custom / enterprise signal</dd></div>
+              <div><dt>Proof</dt><dd>Implementation and onboarding outcomes featured on-site</dd></div>
+            </dl>
+          </article>
+
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">ChurnZero</h3>
+                <p class="vendor-domain">churnzero.com</p>
+              </div>
+              <span class="signal-pill signal-pill-blue">Case studies</span>
+            </div>
+            <div class="stage-list">
+              <span>Adopt</span>
+              <span>Renew</span>
+              <span>Expand</span>
+            </div>
+            <p class="vendor-use-case">
+              Customer health, churn prevention, renewal management, and growth signals for
+              post-sale revenue teams.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>Customer Success teams managing retention and expansion</dd></div>
+              <div><dt>Pricing</dt><dd>Contact sales signal</dd></div>
+              <div><dt>Proof</dt><dd>Named customer stories and value-driven proof messaging</dd></div>
+            </dl>
+          </article>
+
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">Pylon</h3>
+                <p class="vendor-domain">usepylon.com</p>
+              </div>
+              <span class="signal-pill signal-pill-amber">Free trial</span>
+            </div>
+            <div class="stage-list">
+              <span>Support</span>
+              <span>Advocate</span>
+            </div>
+            <p class="vendor-use-case">
+              Customer support and shared inbox workflows with strong voice-of-customer and
+              collaboration signals.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>Product-led and B2B software teams with high-volume support</dd></div>
+              <div><dt>Pricing</dt><dd>Free trial / contact sales signal</dd></div>
+              <div><dt>Proof</dt><dd>Support-led customer experience positioning</dd></div>
+            </dl>
+          </article>
+
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">EverAfter</h3>
+                <p class="vendor-domain">everafter.ai</p>
+              </div>
+              <span class="signal-pill signal-pill-blue">ICP clarity</span>
+            </div>
+            <div class="stage-list">
+              <span>Onboard</span>
+              <span>Adopt</span>
+              <span>Expand</span>
+            </div>
+            <p class="vendor-use-case">
+              Digital customer success workspaces, success planning, and account orchestration for
+              teams scaling customer engagement.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>SaaS companies with scaled post-sale motions</dd></div>
+              <div><dt>Pricing</dt><dd>Custom pricing signal</dd></div>
+              <div><dt>Proof</dt><dd>Strong fit messaging for digital and strategic CS teams</dd></div>
+            </dl>
+          </article>
+
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">Guidecx</h3>
+                <p class="vendor-domain">guidecx.com</p>
+              </div>
+              <span class="signal-pill signal-pill-green">Security</span>
+            </div>
+            <div class="stage-list">
+              <span>Onboard</span>
+            </div>
+            <p class="vendor-use-case">
+              Customer onboarding and implementation visibility for teams that need predictable,
+              scalable delivery.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>B2B services and software teams with structured onboarding</dd></div>
+              <div><dt>Pricing</dt><dd>Enterprise signal</dd></div>
+              <div><dt>Proof</dt><dd>Security and implementation credibility emphasized</dd></div>
+            </dl>
+          </article>
+
+          <article class="vendor-card">
+            <div class="vendor-card-top">
+              <div>
+                <h3 class="vendor-name">UpdateAI</h3>
+                <p class="vendor-domain">update.ai</p>
+              </div>
+              <span class="signal-pill signal-pill-amber">Proof-rich</span>
+            </div>
+            <div class="stage-list">
+              <span>Sign</span>
+              <span>Renew</span>
+            </div>
+            <p class="vendor-use-case">
+              Conversation intelligence and signal capture that helps teams preserve context,
+              identify risk, and improve post-sale handoff quality.
+            </p>
+            <dl class="vendor-facts">
+              <div><dt>ICP</dt><dd>Revenue and Customer Success teams managing complex accounts</dd></div>
+              <div><dt>Pricing</dt><dd>Per-seat signal</dd></div>
+              <div><dt>Proof</dt><dd>Customer outcomes tied to churn reduction and growth</dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="section process" id="how-it-works">
+        <div class="section-heading">
+          <p class="eyebrow">How the data is built</p>
+          <h2>A searchable directory built from structured vendor intelligence</h2>
+        </div>
+        <div class="process-steps">
+          <article>
+            <span>01</span>
+            <h3>Vendors are discovered</h3>
+            <p>Search-based discovery surfaces relevant Customer Success software vendors and normalizes domains before enrichment begins.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Websites are explored</h3>
+            <p>High-signal pages such as homepage, product, pricing, proof, about, and security are gathered for analysis.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Signals are extracted</h3>
+            <p>Lifecycle stage, ICP clues, use cases, pricing cues, proof points, and trust signals are converted into structured fields.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>Profiles become browseable</h3>
+            <p>Each vendor is shaped into a directory-ready profile designed for later search, filtering, and ongoing curation.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section cta-section" id="cta">
+        <div class="cta-panel">
+          <div class="cta-copy">
+            <p class="eyebrow">Follow the launch</p>
+            <h2>Track the Customer Success software landscape as this directory grows</h2>
+            <p>
+              Explore example profiles now, then follow along as new vendors, richer intelligence,
+              and broader lifecycle coverage are added to the public directory.
+            </p>
+            <ul class="cta-points">
+              <li>See newly added vendors as the market expands</li>
+              <li>Follow notable categories, proof-rich tools, and emerging patterns</li>
+              <li>Get updates when the live searchable directory is ready</li>
+            </ul>
+          </div>
+          <div class="cta-actions">
+            <a class="button button-primary" href="#examples">Explore example profiles</a>
+            <a
+              class="button button-secondary"
+              href="mailto:hello@successbycs.com?subject=Join%20the%20Customer%20Success%20Technology%20Directory%20digest"
+            >
+              Join the weekly discovery digest
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <strong>SuccessByCS</strong>
+        <p>Customer Success Technology Directory</p>
       </div>
-    </div>`;
-  }).join('');
-}
-
-function toggleCard(name, event) {
-  if (event.target.tagName === 'A') return;
-  if (expandedCards.has(name)) expandedCards.delete(name);
-  else expandedCards.add(name);
-  renderCards();
-}
-
-document.getElementById('emailInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') handleAccess();
-});
-</script>
+      <p class="footer-note">Curated vendor intelligence for the post-sale software landscape.</p>
+    </footer>
+  </div>
 </body>
 </html>

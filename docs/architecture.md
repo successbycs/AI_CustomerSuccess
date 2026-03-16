@@ -13,6 +13,16 @@ Level 2 and merge logic remain planned, not active.
 
 # Module Boundaries
 
+End-to-end pipeline stages:
+
+Vendor Discovery  
+Homepage Fetch  
+Website Exploration  
+Page Text Extraction  
+Vendor Intelligence Extraction  
+Vendor Profile Builder  
+Dataset Export  
+
 services/discovery/
 
 Instructs Apify to crawl discovery sources and returns normalised vendor candidates to the orchestrator.
@@ -60,6 +70,7 @@ Apify is not used for enrichment.
 site_explorer.py
 
 Discovers high-signal vendor pages such as pricing, product, case studies, about, and security.
+Exploration stays on the vendor domain, caps at 5 total pages per vendor including the homepage, and skips unreachable pages safely.
 
 ---
 

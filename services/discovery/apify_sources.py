@@ -7,6 +7,8 @@ import os
 import re
 from urllib.parse import urlparse
 
+from services.discovery.discovery_config import load_google_search_config
+
 logger = logging.getLogger(__name__)
 
 GOOGLE_SEARCH_ACTOR = "apify/google-search-scraper"
@@ -15,11 +17,15 @@ DENYLISTED_DOMAINS = {
     "gartner.com",
     "google.com",
     "instagram.com",
+    "jobs.ca",
     "linkedin.com",
     "medium.com",
     "reddit.com",
     "substack.com",
+    "slashdot.org",
+    "sourceforge.net",
     "twitter.com",
+    "toolify.ai",
     "wikipedia.org",
     "x.com",
     "youtube.com",
@@ -41,6 +47,7 @@ ARTICLE_PATH_HINTS = (
 CONTENT_HINTS = (
     "best ",
     "blog",
+    "careers",
     "case studies",
     "case study",
     "community",
@@ -50,7 +57,10 @@ CONTENT_HINTS = (
     "guide",
     "guides",
     "how to",
+    "job application",
+    "jobs",
     "listicle",
+    "newsletter",
     "reddit",
     "review",
     "reviews",
@@ -115,6 +125,28 @@ CUSTOMER_SUCCESS_HINTS = (
     "voice of customer",
     "voc",
 )
+NOISE_SUBDOMAIN_PREFIXES = (
+    "blog.",
+    "careers.",
+    "community.",
+    "jobs.",
+    "newsletter.",
+)
+NOISE_DOMAIN_HINTS = (
+    "greenhouse",
+    "myworkdayjobs",
+)
+JOB_PATH_HINTS = (
+    "/career",
+    "/careers",
+    "/job",
+    "/jobs",
+)
+INTERSTITIAL_HINTS = (
+    "403 forbidden",
+    "access denied",
+    "just a moment",
+)
 
 
 def fetch_google_search(queries: list[str]) -> list[dict[str, str]]:
@@ -123,14 +155,20 @@ def fetch_google_search(queries: list[str]) -> list[dict[str, str]]:
         return []
 
     client = get_apify_client()
+    google_search_config = load_google_search_config()
     candidates: list[dict[str, str]] = []
+    logger.info(
+        "Using Google Search config: max_pages_per_query=%s, results_per_page=%s",
+        google_search_config.max_pages_per_query,
+        google_search_config.results_per_page,
+    )
 
     for query in queries:
         run = client.actor(GOOGLE_SEARCH_ACTOR).call(
             run_input={
                 "queries": query,
-                "maxPagesPerQuery": 1,
-                "resultsPerPage": 10,
+                "maxPagesPerQuery": google_search_config.max_pages_per_query,
+                "resultsPerPage": google_search_config.results_per_page,
             }
         )
         items = client.dataset(run["defaultDatasetId"]).list_items().items
@@ -316,11 +354,19 @@ def _should_keep_google_search_result(raw_url: str, item: dict[str, object]) -> 
         domain = domain[4:]
     if not domain or _is_denylisted_domain(domain):
         return False
+    if _has_noise_subdomain(domain):
+        return False
+    if _has_noise_domain_hint(domain):
+        return False
 
     path = parsed.path.lower()
     title = _clean_text(item.get("title")).lower()
     description = _clean_text(item.get("description")).lower()
     text = f"{title} {description}".strip()
+    if _looks_like_access_interstitial(text):
+        return False
+    if _looks_like_job_or_career_content(path, title, description):
+        return False
     if not _looks_like_customer_success_result(text):
         return False
 
@@ -342,6 +388,16 @@ def _is_denylisted_domain(domain: str) -> bool:
     )
 
 
+def _has_noise_subdomain(domain: str) -> bool:
+    """Return True when the domain is an obvious content or jobs subdomain."""
+    return any(domain.startswith(prefix) for prefix in NOISE_SUBDOMAIN_PREFIXES)
+
+
+def _has_noise_domain_hint(domain: str) -> bool:
+    """Return True when the domain clearly belongs to job or content infrastructure."""
+    return any(hint in domain for hint in NOISE_DOMAIN_HINTS)
+
+
 def _has_article_like_path(path: str) -> bool:
     """Return True for paths that look like blogs, articles, or community pages."""
     return any(hint in path for hint in ARTICLE_PATH_HINTS)
@@ -350,6 +406,11 @@ def _has_article_like_path(path: str) -> bool:
 def _looks_like_generic_content(text: str) -> bool:
     """Return True for titles and descriptions that read like content pages."""
     return any(hint in text for hint in CONTENT_HINTS)
+
+
+def _looks_like_access_interstitial(text: str) -> bool:
+    """Return True when the result looks like a blocked page or challenge screen."""
+    return any(hint in text for hint in INTERSTITIAL_HINTS)
 
 
 def _looks_like_listicle_title(title: str) -> bool:
@@ -364,6 +425,14 @@ def _looks_like_listicle_title(title: str) -> bool:
 def _looks_like_product_description(description: str) -> bool:
     """Return True when the description sounds like software, not editorial content."""
     return any(hint in description for hint in PRODUCT_HINTS)
+
+
+def _looks_like_job_or_career_content(path: str, title: str, description: str) -> bool:
+    """Return True when the result is clearly a job posting or careers page."""
+    combined_text = f"{title} {description}".strip()
+    return any(path_hint in path for path_hint in JOB_PATH_HINTS) or any(
+        hint in combined_text for hint in ("career", "careers", "job application", "jobs")
+    )
 
 
 def _looks_like_customer_success_result(text: str) -> bool:

@@ -119,3 +119,27 @@ def test_fetch_vendor_homepage_uses_domain_fallback_when_homepage_name_is_weak(m
     result = vendor_fetcher.fetch_vendor_homepage(vendor)
 
     assert result["vendor_name"] == "Usepylon"
+
+
+def test_fetch_vendor_homepage_skips_error_and_interstitial_pages(monkeypatch):
+    class MockResponse:
+        def __init__(self, status_code, text):
+            self.status_code = status_code
+            self.text = text
+
+    def mock_get(_url, timeout=None):
+        return MockResponse(403, "<html><title>403 Forbidden</title><body>Access denied</body></html>")
+
+    monkeypatch.setattr(vendor_fetcher.requests, "get", mock_get)
+
+    vendor = {
+        "vendor_name": "BlockedVendor",
+        "website": "https://blocked.example.com",
+        "source": "web_search",
+    }
+
+    result = vendor_fetcher.fetch_vendor_homepage(vendor)
+
+    assert result["status_code"] == 403
+    assert result["html"] == ""
+    assert result["text"] == ""

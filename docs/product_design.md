@@ -122,6 +122,16 @@ If Apify were replaced with another crawling provider tomorrow, only services/di
 
 Daily pipeline
 
+Pipeline stages
+
+Vendor Discovery  
+Homepage Fetch  
+Website Exploration  
+Page Text Extraction  
+Vendor Intelligence Extraction  
+Vendor Profile Builder  
+Dataset Export  
+
 Python APScheduler fires at 07:00 UTC inside the running service  
 ↓  
 Python orchestrator triggers discovery  
@@ -250,6 +260,7 @@ Python fetches homepage via requests
 up to 5 pages per vendor  
 pricing, product, case studies, about, security  
 unreachable pages skipped safely  
+same-domain links only  
 
 Returned page payloads include cleaned visible text suitable for deterministic extraction.
 

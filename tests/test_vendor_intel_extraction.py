@@ -219,3 +219,29 @@ def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
         "Renew",
         "Advocate",
     ]
+
+
+def test_extract_vendor_intelligence_caps_confidence_when_cs_relevance_is_weak():
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "GenericTool",
+            "website": "https://generic.example.com",
+            "text": "Trusted by modern teams with customer stories and pricing available.",
+        },
+        "pricing_page": {
+            "vendor_name": "",
+            "website": "https://generic.example.com/pricing",
+            "text": "$99 per user per month.",
+        },
+        "case_studies_page": {
+            "vendor_name": "",
+            "website": "https://generic.example.com/customers",
+            "text": "Customer stories and case studies.",
+        },
+    }
+
+    result = extract_vendor_intelligence(explored_pages)
+
+    assert result.pricing == ["$", "per user", "per month"]
+    assert result.case_studies == ["case study", "customer story"]
+    assert result.confidence == "low"

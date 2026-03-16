@@ -8,6 +8,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 
+CANONICAL_LIFECYCLE_STAGES = [
+    "Sign",
+    "Onboard",
+    "Activate",
+    "Adopt",
+    "Support",
+    "Expand",
+    "Renew",
+    "Advocate",
+]
+
 LIFECYCLE_STAGE_RULES = [
     (
         "Sign",
@@ -180,7 +191,31 @@ CASE_STUDY_RULES = [
 CUSTOMER_PATTERNS = [
     r"trusted by ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
     r"customers include ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
+    r"used by ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
     r"how ([A-Z][A-Za-z0-9&.-]+) uses",
+]
+STRONG_CS_RELEVANCE_HINTS = [
+    "customer success",
+    "customer success teams",
+    "customer onboarding",
+    "customer health",
+    "health score",
+    "health scoring",
+    "implementation portal",
+    "implementation portals",
+    "in-app guidance",
+    "onboarding automation",
+    "playbook automation",
+    "renewal automation",
+    "sales to cs handoff",
+    "sales-to-cs handoff",
+    "stakeholder mapping",
+    "support automation",
+    "ticket triage",
+    "time to value",
+    "time-to-value",
+    "usage analytics",
+    "voice of customer",
 ]
 
 
@@ -240,6 +275,17 @@ class VendorIntelligence:
             if value is not None and not isinstance(value, bool):
                 raise TypeError(f"{field_name} must be a bool or None")
 
+        invalid_lifecycle_stages = [
+            lifecycle_stage
+            for lifecycle_stage in self.lifecycle_stages
+            if lifecycle_stage not in CANONICAL_LIFECYCLE_STAGES
+        ]
+        if invalid_lifecycle_stages:
+            raise TypeError(
+                "lifecycle_stages must only contain canonical stage names: "
+                + ", ".join(invalid_lifecycle_stages)
+            )
+
 
 def extract_vendor_intelligence(
     page_payload: dict[str, object],
@@ -254,6 +300,7 @@ def extract_vendor_intelligence(
     homepage_text = str(homepage_payload.get("text", "")).strip()
     combined_text = _combine_page_texts(page_payloads)
     combined_text_lower = combined_text.lower()
+    relevance_text = _combine_relevance_texts(page_payloads).lower()
     pricing_text = _page_text(page_payloads, "pricing_page").lower()
     case_studies_text = _page_text(page_payloads, "case_studies_page").lower()
     security_text = _page_text(page_payloads, "security_page").lower()
@@ -274,7 +321,7 @@ def extract_vendor_intelligence(
         website=str(homepage_payload.get("website", "")),
         source=str(homepage_payload.get("source", "")),
         mission=_extract_mission(homepage_text or combined_text),
-        usp=value_statements[0] if value_statements else "",
+        usp=_extract_usp(value_statements, combined_text),
         icp=icp,
         use_cases=use_cases,
         lifecycle_stages=lifecycle_stages,
@@ -292,6 +339,7 @@ def extract_vendor_intelligence(
             value_statements=value_statements,
             case_studies=case_studies,
             pricing=pricing,
+            strong_cs_relevance=_has_strong_cs_relevance(relevance_text),
         ),
         evidence_urls=all_evidence_urls,
     )
@@ -374,14 +422,11 @@ def _extract_customers(text: str) -> list[str]:
     customers: list[str] = []
 
     for pattern in CUSTOMER_PATTERNS:
-        match = re.search(pattern, text)
-        if not match:
-            continue
-
-        for customer_name in match.group(1).split(","):
-            cleaned_name = customer_name.strip().strip(".")
-            if cleaned_name and cleaned_name not in customers:
-                customers.append(cleaned_name)
+        for match in re.finditer(pattern, text):
+            for customer_name in re.split(r",|\band\b", match.group(1)):
+                cleaned_name = customer_name.strip().strip(".")
+                if cleaned_name and cleaned_name not in customers:
+                    customers.append(cleaned_name)
 
     return customers
 
@@ -400,8 +445,26 @@ def _extract_mission(text: str) -> str:
     sentences = re.split(r"(?<=[.!?])\s+", normalized_text)
     for sentence in sentences:
         cleaned_sentence = sentence.strip(" -")
-        if cleaned_sentence:
+        if _looks_like_mission_sentence(cleaned_sentence):
             return cleaned_sentence[:200]
+
+    return sentences[0][:200].strip(" -") if sentences else ""
+
+
+def _extract_usp(value_statements: list[str], combined_text: str) -> str:
+    """Return the most useful deterministic USP signal available."""
+    if value_statements:
+        return value_statements[0]
+
+    normalized_text = re.sub(r"\s+", " ", combined_text).strip()
+    sentences = re.split(r"(?<=[.!?])\s+", normalized_text)
+    for sentence in sentences:
+        lowered_sentence = sentence.lower()
+        if any(
+            keyword in lowered_sentence
+            for keyword in ("reduce", "increase", "improve", "faster", "accelerate", "automate")
+        ):
+            return sentence[:120].strip(" -")
 
     return ""
 
@@ -429,8 +492,12 @@ def _determine_confidence(
     value_statements: list[str],
     case_studies: list[str],
     pricing: list[str],
+    strong_cs_relevance: bool,
 ) -> str:
     """Return a simple deterministic confidence label."""
+    if not strong_cs_relevance:
+        return "low"
+
     signal_score = (
         (len(lifecycle_stages) * 2)
         + len(use_cases)
@@ -468,6 +535,16 @@ def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
     return " ".join(texts).strip()
 
 
+def _combine_relevance_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
+    """Return text from the highest-signal relevance pages only."""
+    texts: list[str] = []
+    for page_key in ["homepage", "product_page", "about_page"]:
+        page_text = _page_text(page_payloads, page_key)
+        if page_text:
+            texts.append(page_text)
+    return " ".join(texts).strip()
+
+
 def _page_text(page_payloads: dict[str, dict[str, str | int]], page_key: str) -> str:
     page_payload = page_payloads.get(page_key, {})
     return str(page_payload.get("text", "")).strip()
@@ -481,3 +558,28 @@ def _collect_page_urls(page_payloads: dict[str, dict[str, str | int]]) -> list[s
         if page_url and page_url not in evidence_urls:
             evidence_urls.append(page_url)
     return evidence_urls
+
+
+def _has_strong_cs_relevance(text: str) -> bool:
+    """Return True when vendor text shows direct Customer Success relevance."""
+    return _contains_any(text, STRONG_CS_RELEVANCE_HINTS)
+
+
+def _looks_like_mission_sentence(sentence: str) -> bool:
+    lowered_sentence = sentence.lower()
+    return any(
+        hint in lowered_sentence
+        for hint in (
+            "help",
+            "helps",
+            "platform",
+            "software",
+            "product",
+            "improve",
+            "increase",
+            "reduce",
+            "enable",
+            "enables",
+            "built for",
+        )
+    )

@@ -71,27 +71,8 @@ def write_rows_to_csv(rows: list[dict[str, str]], output_path: Path) -> None:
     """Write Google Sheets-ready rows to a CSV file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fieldnames = [
-        "vendor_name",
-        "website",
-        "mission",
-        "usp",
-        "icp",
-        "use_cases",
-        "lifecycle_stages",
-        "pricing",
-        "free_trial",
-        "soc2",
-        "founded",
-        "case_studies",
-        "customers",
-        "value_statements",
-        "confidence",
-        "evidence_urls",
-    ]
-
     with output_path.open("w", newline="", encoding="utf-8") as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer = csv.DictWriter(csv_file, fieldnames=GOOGLE_SHEETS_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -118,7 +99,7 @@ def append_rows_to_google_sheet(rows: list[dict[str, str]]) -> None:
         .values()
         .append(
             spreadsheetId=sheet_id,
-            range="vendors!A:P",
+            range=f"vendors!A:{_sheet_column_letter(len(GOOGLE_SHEETS_COLUMNS))}",
             valueInputOption="USER_ENTERED",
             body={"values": values},
         )
@@ -165,3 +146,15 @@ def _stringify_boolean(value: bool | None) -> str:
     if value is None:
         return ""
     return "TRUE" if value else "FALSE"
+
+
+def _sheet_column_letter(column_number: int) -> str:
+    """Return a 1-based Google Sheets column letter."""
+    letters: list[str] = []
+    current_number = column_number
+
+    while current_number > 0:
+        current_number, remainder = divmod(current_number - 1, 26)
+        letters.append(chr(65 + remainder))
+
+    return "".join(reversed(letters))

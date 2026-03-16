@@ -45,3 +45,24 @@ def test_build_vendor_profile_merges_source_and_evidence_urls():
         "https://example.com",
         "https://example.com/pricing",
     ]
+
+
+def test_build_vendor_profile_falls_back_to_discovery_data_when_homepage_fields_are_missing():
+    vendor = {
+        "vendor_name": "DiscoveryName",
+        "website": "https://fallback.example.com",
+        "source": "google_search",
+    }
+    explored_pages = {"homepage": {"website": "https://fallback.example.com", "text": ""}}
+    intelligence = VendorIntelligence(
+        vendor_name="",
+        website="",
+        mission="Help customer success teams improve adoption.",
+        confidence="medium",
+    )
+
+    result = build_vendor_profile(vendor, explored_pages, intelligence)
+
+    assert result.vendor_name == "DiscoveryName"
+    assert result.website == "https://fallback.example.com"
+    assert result.source == "google_search"

@@ -8,6 +8,8 @@ from typing import Callable
 from services.discovery import web_search
 from services.enrichment import site_explorer
 from services.enrichment import vendor_fetcher
+from services.extraction import llm_extractor
+from services.extraction import merge_results
 from services.extraction import vendor_intel
 from services.extraction import vendor_profile_builder
 from services.export import google_sheets
@@ -29,6 +31,8 @@ def run_mvp_pipeline(
     fetch_vendor_homepage_fn: Callable[[VendorCandidate], HomepagePayload] | None = None,
     explore_vendor_site_fn: Callable[[HomepagePayload], ExploredPages] | None = None,
     extract_vendor_intelligence_fn: Callable[[dict[str, object]], VendorIntelligence] | None = None,
+    extract_vendor_intelligence_llm_fn: Callable[[dict[str, object]], object | None] | None = None,
+    merge_vendor_intelligence_fn: Callable[[VendorIntelligence, object | None], VendorIntelligence] | None = None,
     build_vendor_profile_fn: Callable[[VendorCandidate, ExploredPages, VendorIntelligence], VendorIntelligence]
     | None = None,
     vendor_intelligence_to_sheet_row_fn: Callable[[VendorIntelligence], SheetRow] | None = None,
@@ -43,6 +47,12 @@ def run_mvp_pipeline(
     extract_vendor_intelligence_fn = (
         extract_vendor_intelligence_fn or vendor_intel.extract_vendor_intelligence
     )
+    extract_vendor_intelligence_llm_fn = (
+        extract_vendor_intelligence_llm_fn or llm_extractor.extract_vendor_intelligence
+    )
+    merge_vendor_intelligence_fn = (
+        merge_vendor_intelligence_fn or merge_results.merge_vendor_intelligence
+    )
     build_vendor_profile_fn = build_vendor_profile_fn or vendor_profile_builder.build_vendor_profile
     vendor_intelligence_to_sheet_row_fn = (
         vendor_intelligence_to_sheet_row_fn
@@ -56,6 +66,7 @@ def run_mvp_pipeline(
         upsert_vendor_result_fn = supabase_client.upsert_vendor_result
 
     logger.info("Starting MVP pipeline for query: %s", query)
+    llm_extractor.log_runtime_configuration()
     vendor_rows: list[SheetRow] = []
     skipped_existing_count = 0
 
@@ -88,8 +99,15 @@ def run_mvp_pipeline(
             logger.warning("Site exploration failed for %s, using homepage only: %s", vendor_name, error)
             explored_pages = {"homepage": homepage_payload}
 
-        intelligence = extract_vendor_intelligence_fn(explored_pages)
+        deterministic_intelligence = extract_vendor_intelligence_fn(explored_pages)
+        llm_result = extract_vendor_intelligence_llm_fn(explored_pages)
+        intelligence = merge_vendor_intelligence_fn(deterministic_intelligence, llm_result)
         profile = build_vendor_profile_fn(vendor, explored_pages, intelligence)
+
+        drop_reason = _drop_reason(profile, llm_result)
+        if drop_reason:
+            logger.info("Dropping vendor %s: %s", _profile_name(profile), drop_reason)
+            continue
 
         if upsert_vendor_result_fn:
             try:
@@ -112,3 +130,28 @@ def run_mvp_pipeline(
         skipped_existing_count,
     )
     return vendor_rows
+
+
+def _drop_reason(profile: VendorIntelligence | dict[str, object], llm_result: object | None) -> str:
+    """Return a drop reason when a profile should not be persisted or exported."""
+    llm_relevant = getattr(llm_result, "is_cs_relevant", None)
+    if llm_relevant is False:
+        return "llm_marked_non_cs_relevant"
+
+    confidence = _profile_confidence(profile).lower()
+    if confidence == "low":
+        return "low_confidence"
+
+    return ""
+
+
+def _profile_confidence(profile: VendorIntelligence | dict[str, object]) -> str:
+    if isinstance(profile, dict):
+        return str(profile.get("confidence", ""))
+    return profile.confidence
+
+
+def _profile_name(profile: VendorIntelligence | dict[str, object]) -> str:
+    if isinstance(profile, dict):
+        return str(profile.get("vendor_name", ""))
+    return profile.vendor_name

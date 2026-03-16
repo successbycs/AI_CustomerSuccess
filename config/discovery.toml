@@ -1,0 +1,26 @@
+# Discovery crawling settings for vendor discovery.
+#
+# This file is stored in `config/discovery.toml` so non-developers can change
+# crawl breadth without editing Python code.
+#
+# Editing guidance:
+# - `max_pages_per_query` controls how many Google search result pages Apify
+#   crawls for each search query.
+# - Google usually shows about 10 organic results per page, so:
+#   1 page  ~= first 10 results
+#   5 pages ~= first 50 results
+#   20 pages ~= first 200 results
+# - Higher values increase discovery coverage, but they also increase runtime,
+#   duplicate/noisy results, and external API usage.
+# - Keep `results_per_page` at 10 unless the Apify actor changes behavior.
+# - The code applies simple safety limits, so invalid or extreme values fall
+#   back to a safe range instead of crashing the pipeline.
+#
+# Recommended workflow:
+# 1. Start with a smaller number when testing locally.
+# 2. Increase toward 20 when you want broader discovery coverage.
+# 3. Review output quality regularly because deeper pages are usually noisier.
+
+[google_search]
+max_pages_per_query = 5
+results_per_page = 10

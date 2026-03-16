@@ -13,6 +13,12 @@ import requests
 
 from services.extraction.page_text_extractor import extract_visible_text
 
+BLOCKED_PAGE_HINTS = (
+    "403 forbidden",
+    "access denied",
+    "just a moment",
+)
+
 
 def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     """Fetch the homepage for a vendor and return structured page data.
@@ -28,10 +34,14 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
     vendor_name = _resolve_vendor_name(vendor.get("vendor_name", ""), website, "")
     try:
         response = requests.get(website, timeout=10)
-        html = response.text
-        vendor_name = _resolve_vendor_name(vendor.get("vendor_name", ""), website, html)
-        text = extract_visible_text(html)
         status_code = response.status_code
+        html = response.text
+        if _should_skip_page(response.status_code, response.text):
+            html = ""
+            text = ""
+        else:
+            vendor_name = _resolve_vendor_name(vendor.get("vendor_name", ""), website, html)
+            text = extract_visible_text(html)
     except requests.RequestException:
         html = ""
         text = ""
@@ -45,6 +55,15 @@ def fetch_vendor_homepage(vendor: dict[str, str]) -> dict[str, str | int]:
         "html": html,
         "text": text
     }
+
+
+def _should_skip_page(status_code: int, html_content: str) -> bool:
+    """Return True when the fetched page should not be used for extraction."""
+    if status_code >= 400:
+        return True
+
+    lowered_html = html_content.lower()
+    return any(hint in lowered_html for hint in BLOCKED_PAGE_HINTS)
 
 
 def _resolve_vendor_name(search_name: str, website: str, html_content: str) -> str:

@@ -1,0 +1,167 @@
+"""Tests for optional LLM extraction."""
+
+from __future__ import annotations
+
+import requests
+
+from services.extraction import llm_extractor
+
+
+class FakeResponse:
+    def __init__(self, payload: dict, *, status_code: int = 200, text: str = ""):
+        self._payload = payload
+        self.status_code = status_code
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            error = requests.HTTPError(f"status={self.status_code}")
+            error.response = self
+            raise error
+
+    def json(self) -> dict:
+        return self._payload
+
+
+def test_extract_vendor_intelligence_returns_none_without_openai_config(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Example vendor homepage"}}
+    )
+
+    assert result is None
+
+
+def test_log_runtime_configuration_logs_once(monkeypatch, caplog):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.setattr(llm_extractor, "_runtime_config_logged_for_process", False)
+    caplog.set_level("INFO")
+
+    llm_extractor.log_runtime_configuration()
+    llm_extractor.log_runtime_configuration()
+
+    assert caplog.text.count("OpenAI LLM extraction config: enabled=False") == 1
+    assert llm_extractor.OPENAI_API_URL in caplog.text
+    assert llm_extractor.DEFAULT_OPENAI_MODEL in caplog.text
+
+
+def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured_request = {}
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: int):
+        captured_request["url"] = url
+        captured_request["headers"] = headers
+        captured_request["json"] = json
+        captured_request["timeout"] = timeout
+        return FakeResponse(
+            {
+                "output_text": (
+                    '{"is_cs_relevant": true, "mission": "Reduce churn for customer success teams.", '
+                    '"usp": "Predict churn before it happens.", '
+                    '"use_cases": ["churn prediction", "renewal forecasting"], '
+                    '"pricing": ["contact sales", "per seat"], '
+                    '"free_trial": false, "soc2": true, "founded": "2022", "confidence": "high"}'
+                )
+            }
+        )
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {
+            "homepage": {
+                "website": "https://example.com",
+                "text": "Homepage text about customer success AI.",
+            },
+            "pricing_page": {
+                "website": "https://example.com/pricing",
+                "text": "Pricing text.",
+            },
+        },
+        request_post=fake_post,
+    )
+
+    assert result is not None
+    assert captured_request["url"] == llm_extractor.OPENAI_API_URL
+    assert captured_request["timeout"] == 45
+    assert captured_request["json"]["input"][1]["content"][0]["text"].startswith("Extract vendor intelligence")
+    assert captured_request["json"]["text"]["format"]["type"] == "json_schema"
+    assert result.is_cs_relevant is True
+    assert result.mission == "Reduce churn for customer success teams."
+    assert result.usp == "Predict churn before it happens."
+    assert result.use_cases == ["churn prediction", "renewal forecasting"]
+    assert result.pricing == ["contact sales", "per seat"]
+    assert result.free_trial is False
+    assert result.soc2 is True
+    assert result.founded == "2022"
+    assert result.confidence == "high"
+
+
+def test_extract_vendor_intelligence_returns_none_when_json_is_invalid(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Example vendor homepage"}},
+        request_post=lambda *args, **kwargs: FakeResponse({"output_text": "not-json"}),
+    )
+
+    assert result is None
+
+
+def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Customer success AI platform"}},
+        request_post=lambda *args, **kwargs: FakeResponse(
+            {
+                "output": [
+                    {
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": (
+                                    '{"is_cs_relevant": true, "mission": "Improve adoption.", '
+                                    '"usp": "Lifecycle intelligence.", '
+                                    '"use_cases": ["onboarding"], "pricing": ["contact sales"], '
+                                    '"free_trial": null, "soc2": true, "founded": "2021", "confidence": "medium"}'
+                                ),
+                            }
+                        ]
+                    }
+                ]
+            }
+        ),
+    )
+
+    assert result is not None
+    assert result.mission == "Improve adoption."
+    assert result.confidence == "medium"
+
+
+def test_extract_vendor_intelligence_disables_llm_after_first_client_error(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(llm_extractor, "_llm_is_disabled_for_process", False)
+    call_count = {"count": 0}
+
+    def fake_post(*args, **kwargs):
+        call_count["count"] += 1
+        return FakeResponse(
+            {"error": {"message": "bad request"}},
+            status_code=400,
+            text='{"error":{"message":"bad request"}}',
+        )
+
+    first_result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Customer success software"}},
+        request_post=fake_post,
+    )
+    second_result = llm_extractor.extract_vendor_intelligence(
+        {"homepage": {"website": "https://example.com", "text": "Customer success software"}},
+        request_post=fake_post,
+    )
+
+    assert first_result is None
+    assert second_result is None
+    assert call_count["count"] == 1

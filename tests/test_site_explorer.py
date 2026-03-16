@@ -52,3 +52,38 @@ def test_explore_vendor_site_discovers_high_signal_pages(monkeypatch):
     assert result["pricing_page"]["website"] == "https://example.com/pricing"
     assert result["product_page"]["text"] == "Customer success platform"
     assert "security_page" not in result
+
+
+def test_explore_vendor_site_matches_anchor_text_and_skips_unreachable_pages(monkeypatch):
+    homepage_payload = {
+        "vendor_name": "ExampleCorp",
+        "website": "https://example.com",
+        "source": "google_search",
+        "page_type": "homepage",
+        "status_code": 200,
+        "html": (
+            '<html><body>'
+            '<a href="/plans">Pricing</a>'
+            '<a href="/trust-center">Security and Compliance</a>'
+            '<a href="https://external.example.com/about">About</a>'
+            "</body></html>"
+        ),
+        "text": "Homepage text",
+    }
+
+    class MockResponse:
+        def __init__(self, status_code: int, text: str):
+            self.status_code = status_code
+            self.text = text
+
+    def mock_get(url: str, timeout: int = 10):
+        if url == "https://example.com/plans":
+            return MockResponse(200, "<html><body>$49 per seat</body></html>")
+        raise site_explorer.requests.RequestException("timeout")
+
+    monkeypatch.setattr(site_explorer.requests, "get", mock_get)
+
+    result = site_explorer.explore_vendor_site(homepage_payload)
+
+    assert list(result) == ["homepage", "pricing_page"]
+    assert result["pricing_page"]["website"] == "https://example.com/plans"

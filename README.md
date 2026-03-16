@@ -17,6 +17,9 @@ The CLI loads environment variables from a local `.env` file automatically.
 Google Sheets output is optional and uses `GOOGLE_SHEETS_ID` plus
 `GOOGLE_SHEETS_CREDENTIALS_JSON`.
 
+Discovery crawl depth is configured in `config/discovery.toml`.
+The current repo-level default is `max_pages_per_query = 20`.
+
 ## Run Tests
 
 Use the local virtual environment for deterministic test runs:

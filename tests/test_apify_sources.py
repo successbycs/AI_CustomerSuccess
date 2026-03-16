@@ -1,6 +1,7 @@
 """Tests for the Apify Google Search discovery adapter."""
 
 from services.discovery import apify_sources
+from services.discovery.discovery_config import GoogleSearchConfig
 
 
 class FakeDatasetItems:
@@ -67,6 +68,11 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
     )
 
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_google_search_config",
+        lambda: GoogleSearchConfig(max_pages_per_query=7, results_per_page=10),
+    )
 
     results = apify_sources.fetch_google_search(["query one", "query two"])
 
@@ -79,7 +85,7 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
             apify_sources.GOOGLE_SEARCH_ACTOR,
             {
                 "queries": "query one",
-                "maxPagesPerQuery": 1,
+                "maxPagesPerQuery": 7,
                 "resultsPerPage": 10,
             },
         ),
@@ -87,7 +93,7 @@ def test_fetch_google_search_normalizes_candidates_and_deduplicates(monkeypatch)
             apify_sources.GOOGLE_SEARCH_ACTOR,
             {
                 "queries": "query two",
-                "maxPagesPerQuery": 1,
+                "maxPagesPerQuery": 7,
                 "resultsPerPage": 10,
             },
         ),
@@ -147,6 +153,11 @@ def test_fetch_google_search_uses_organic_result_urls_not_google_domain(monkeypa
     )
 
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_google_search_config",
+        lambda: GoogleSearchConfig(),
+    )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
 
@@ -200,6 +211,11 @@ def test_fetch_google_search_filters_junk_domains_and_generic_content(monkeypatc
     )
 
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_google_search_config",
+        lambda: GoogleSearchConfig(),
+    )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
 
@@ -227,6 +243,11 @@ def test_fetch_google_search_keeps_vendor_domains_and_prefers_root_homepage(monk
     )
 
     monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_google_search_config",
+        lambda: GoogleSearchConfig(),
+    )
 
     results = apify_sources.fetch_google_search(["customer success ai"])
 
@@ -235,6 +256,48 @@ def test_fetch_google_search_keeps_vendor_domains_and_prefers_root_homepage(monk
             "company_name": "Dock",
             "website": "https://dock.us",
             "raw_description": "Customer success software with AI workflows",
+            "source": "google_search",
+        }
+    ]
+
+
+def test_fetch_google_search_filters_jobs_and_interstitial_pages(monkeypatch):
+    fake_client = FakeApifyClient(
+        {
+            "dataset_1": [
+                {
+                    "title": "Job Application for AI Engineer at HumanSignal",
+                    "url": "https://job-boards.greenhouse.io/humansignal/jobs/123",
+                    "description": "Customer success and AI role",
+                },
+                {
+                    "title": "Just a moment...",
+                    "url": "https://blog.hubspot.com/service/ai-and-customer-success",
+                    "description": "Access denied",
+                },
+                {
+                    "title": "Planhat",
+                    "url": "https://planhat.com/customer-success-platform",
+                    "description": "Customer success platform for retention and expansion",
+                },
+            ]
+        }
+    )
+
+    monkeypatch.setattr(apify_sources, "get_apify_client", lambda: fake_client)
+    monkeypatch.setattr(
+        apify_sources,
+        "load_google_search_config",
+        lambda: GoogleSearchConfig(),
+    )
+
+    results = apify_sources.fetch_google_search(["customer success ai"])
+
+    assert results == [
+        {
+            "company_name": "Planhat",
+            "website": "https://planhat.com",
+            "raw_description": "Customer success platform for retention and expansion",
             "source": "google_search",
         }
     ]
