@@ -1,0 +1,216 @@
+{
+  "milestones": [
+    {
+      "id": "M01",
+      "title": "Discovery foundation",
+      "status": "complete",
+      "dependencies": [],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_apify_sources.py tests/test_discovery_config.py tests/test_web_search.py"
+      ]
+    },
+    {
+      "id": "M02",
+      "title": "Two-phase candidate -> enrichment pipeline",
+      "status": "complete",
+      "dependencies": [
+        "M01"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_discovery_runner.py tests/test_discovery_store.py tests/test_enrichment_runner.py tests/test_mvp_pipeline.py"
+      ]
+    },
+    {
+      "id": "M03",
+      "title": "Bounded website exploration",
+      "status": "complete",
+      "dependencies": [
+        "M02"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_site_explorer.py tests/test_vendor_fetcher.py"
+      ]
+    },
+    {
+      "id": "M04",
+      "title": "Deterministic extraction baseline",
+      "status": "complete",
+      "dependencies": [
+        "M03"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_page_text_extractor.py tests/test_vendor_intel_extraction.py tests/test_vendor_profile_builder.py"
+      ]
+    },
+    {
+      "id": "M05",
+      "title": "Optional LLM enrichment and safe merge",
+      "status": "complete",
+      "dependencies": [
+        "M04"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_llm_extractor.py tests/test_merge_results.py"
+      ]
+    },
+    {
+      "id": "M06",
+      "title": "Directory relevance scoring",
+      "status": "complete",
+      "dependencies": [
+        "M05"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_vendor_profile_builder.py tests/test_directory_relevance.py"
+      ]
+    },
+    {
+      "id": "M07",
+      "title": "Review and public export artifacts",
+      "status": "complete",
+      "dependencies": [
+        "M06"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_directory_dataset.py tests/test_vendor_review_dataset.py tests/test_google_sheets.py",
+        ".venv/bin/python scripts/export_directory_dataset.py"
+      ]
+    },
+    {
+      "id": "M08",
+      "title": "Public directory experience",
+      "status": "not_started",
+      "dependencies": [
+        "M07"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_directory_dataset.py",
+        "Local preview check of landing.html and vendor.html"
+      ]
+    },
+    {
+      "id": "M09",
+      "title": "Admin visibility and operator actions",
+      "status": "not_started",
+      "dependencies": [
+        "M08"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_admin_api.py tests/test_admin_actions.py tests/test_admin_update_vendor.py tests/test_run_store.py"
+      ]
+    },
+    {
+      "id": "M10",
+      "title": "Run tracking and scheduled operation hardening",
+      "status": "not_started",
+      "dependencies": [
+        "M09"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_scheduler.py tests/test_run_store.py tests/test_mvp_pipeline.py",
+        ".venv/bin/python -m services.pipeline.scheduler --run-now discovery",
+        ".venv/bin/python -m services.pipeline.scheduler --run-now digest"
+      ]
+    },
+    {
+      "id": "M11",
+      "title": "Documentation and config source-of-truth alignment",
+      "status": "complete",
+      "dependencies": [
+        "M07"
+      ],
+      "verify": [
+        "Manual doc review across README.md, docs/product_design.md, docs/architecture.md, docs/codex_guardrails.md, docs/autonomous_dev_loop.md, docs/autonomous_kickoff_prompt.md, docs/agents/*.md, docs/website/ops-console.html, config/pipeline_config.json, and config/scheduler.toml"
+      ]
+    },
+    {
+      "id": "M12",
+      "title": "Autonomous development control plane",
+      "status": "complete",
+      "dependencies": [
+        "M11"
+      ],
+      "verify": [
+        "Read docs/implementation_plan.md",
+        "Read docs/autonomous_dev_loop.md",
+        "Read docs/autonomous_kickoff_prompt.md",
+        "Read docs/agents/*.md"
+      ]
+    },
+    {
+      "id": "M12A",
+      "title": "Autonomous controller pipeline bootstrap",
+      "status": "complete",
+      "dependencies": [
+        "M12"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/autonomous_audit.py",
+        ".venv/bin/python scripts/autonomous_controller.py status",
+        ".venv/bin/python scripts/autonomous_controller.py next",
+        "bash scripts/run_autonomous_cycle.sh"
+      ]
+    },
+    {
+      "id": "M13",
+      "title": "Milestone-close verification script",
+      "status": "complete",
+      "dependencies": [
+        "M12A"
+      ],
+      "verify": [
+        "bash scripts/verify_project.sh"
+      ]
+    },
+    {
+      "id": "M14",
+      "title": "Container and devcontainer parity",
+      "status": "not_started",
+      "dependencies": [
+        "M13"
+      ],
+      "verify": [
+        "docker build -t ai-customer-success .",
+        "docker run --rm ai-customer-success python -m pytest",
+        "Use the devcontainer to run python -m pytest"
+      ]
+    },
+    {
+      "id": "M15",
+      "title": "Supabase schema and persistence hardening",
+      "status": "not_started",
+      "dependencies": [
+        "M14"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/check_supabase.py",
+        "Targeted persistence and admin tests"
+      ]
+    },
+    {
+      "id": "M16",
+      "title": "End-to-end runtime hardening",
+      "status": "not_started",
+      "dependencies": [
+        "M15"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/run_pipeline.py",
+        "Local preview checks of landing.html, vendor.html, admin.html, and outputs/vendor_review.html"
+      ]
+    },
+    {
+      "id": "M17",
+      "title": "Internal launch readiness",
+      "status": "not_started",
+      "dependencies": [
+        "M16"
+      ],
+      "verify": [
+        "Full milestone-close review",
+        "Full test suite",
+        "End-to-end runtime and operator walkthrough"
+      ]
+    }
+  ]
+}

@@ -9,6 +9,10 @@ Current implementation status:
 the active code path in this repo is deterministic-first and runs Level 1 extraction
 plus an active optional Level 2 LLM extraction pass with deterministic fallback.
 
+Current repo status:
+- the repo already includes directory export, vendor review export, static directory pages, a thin admin API, operator actions, and run tracking
+- the next major work is not basic feature creation; it is consolidation, hardening, repeatability, and launch readiness
+
 ---
 
 # Module Boundaries
@@ -90,7 +94,40 @@ enriched
 dropped_low_confidence  
 dropped_non_cs_relevant  
 failed_fetch  
-failed_enrichment  
+failed_enrichment
+
+Current persistence and fallback note:
+
+The repo can surface local fallback artifacts for candidates, vendors, and run history when persistence is unavailable or schema-misaligned. That fallback keeps operator visibility alive, but it does not replace the requirement for stable Supabase schema alignment.
+
+---
+
+# Data Serving Model
+
+The architecture uses a layered data-serving model rather than a single storage/serving mechanism.
+
+Canonical persistence:
+
+- The pipeline extracts structured vendor intelligence from vendor websites
+- The structured vendor record is persisted to Supabase
+- Supabase remains the canonical system of record
+
+Derived serving artifacts:
+
+- Public directory pages use exported JSON artifacts derived from the canonical dataset
+- The primary public serving artifact is `outputs/directory_dataset.json`
+- Review-oriented derived artifacts include `outputs/vendor_review_dataset.json` and `outputs/vendor_review.html`
+
+Internal surfaces:
+
+- Internal/admin pages use a thin admin/API layer
+- That layer should read canonical persisted data first
+- It may fall back to local artifacts when persistence is unavailable or schema-drifted
+
+Explicit v1 rule:
+
+- Public browser pages do not hit Supabase directly
+- If a dynamic public serving model is introduced later, it should go through a backend/API layer rather than direct browser-to-Supabase access
 
 ---
 
@@ -215,7 +252,19 @@ support automation → Support
 churn prediction → Renew  
 NPS → Advocate  
 upsell detection → Expand  
-onboarding automation → Onboard  
+onboarding automation → Onboard
+
+---
+
+# Configuration Reality
+
+The configuration story is currently mixed and should be treated carefully during autonomous development.
+
+- `config/pipeline_config.json` is the active runtime source of truth for discovery, enrichment, directory relevance, LLM behavior, and export behavior
+- `config/scheduler.toml` is the active runtime source of truth for scheduling
+- split TOML config files under `config/` exist, but documentation and runtime are not yet fully consolidated around them
+
+Milestone work must keep docs honest about this state rather than assuming config consolidation is already complete.
 
 ---
 

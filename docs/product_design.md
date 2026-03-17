@@ -14,6 +14,12 @@ the codebase at this checkpoint runs Level 1 deterministic extraction as the bas
 and Level 2 LLM-assisted extraction as an active optional enrichment layer.
 If Level 2 is unavailable, the MVP pipeline falls back to Level 1 without failing the run.
 
+Current repo snapshot:
+- discovery, enrichment, deterministic extraction, optional LLM enrichment, directory scoring, and export artifacts are implemented
+- public directory pages and admin pages are implemented as static pages backed by exported JSON and admin API endpoints
+- run tracking and scheduler entrypoints exist
+- documentation, config consolidation, schema hardening, and launch-readiness verification are still active milestones
+
 ---
 
 # Primary Deliverable
@@ -32,6 +38,38 @@ The pipeline also produces a slim operator review dataset and a self-contained v
 
 `outputs/vendor_review_dataset.json`  
 `outputs/vendor_review.html`
+
+---
+
+# Source Of Truth And Serving Model
+
+The system must be explicit about how website-derived vendor data is stored and served.
+
+Canonical model:
+
+- Vendor website content is fetched and analyzed by the Python pipeline
+- Python converts that content into structured vendor intelligence records
+- Supabase is the canonical system of record for vendor data
+- Public directory pages are served from exported JSON artifacts derived from the canonical dataset
+- Internal admin and review surfaces may read Supabase through a thin API layer and may fall back to local artifacts when persistence is unavailable
+
+This means the system is not choosing between JSON files and Supabase.
+It uses both, with different responsibilities:
+
+- Supabase = source of truth
+- exported JSON files = public serving layer and review artifacts
+- admin API = internal operator layer
+
+Public v1 serving rules:
+
+- The public website does not query Supabase directly from the browser
+- The public listing and vendor detail pages use exported JSON artifacts, primarily `outputs/directory_dataset.json`
+- Review artifacts such as `outputs/vendor_review_dataset.json` and `outputs/vendor_review.html` are derived outputs, not the canonical record
+
+Fallback rules:
+
+- Fallback JSON artifacts are allowed to keep internal/operator views usable when persistence is unavailable or schema-drifted
+- Fallback artifacts do not replace the requirement for healthy canonical persistence in Supabase
 
 Each vendor row contains fields such as:
 
@@ -128,6 +166,14 @@ writes rows to Google Sheets and sends Slack digest
 services/pipeline  
 orchestrator controlling the full pipeline
 
+Current configuration status:
+
+The repo is still in a transitional config state.
+
+- `config/pipeline_config.json` is the active runtime source of truth for most pipeline behavior
+- `config/scheduler.toml` is the active source of truth for scheduler timing
+- additional split TOML files exist in `config/`, but config consolidation is not yet complete and they should not automatically be treated as the primary runtime source without checking the code
+
 If Apify were replaced with another crawling provider tomorrow, only services/discovery/apify_sources.py would change.
 
 ---
@@ -192,6 +238,29 @@ Python updates Google Sheets review tabs for runs, candidates, and enriched vend
 Python exports `outputs/directory_dataset.json`
 ↓
 Python exports `outputs/vendor_review_dataset.json` and `outputs/vendor_review.html`
+
+Current operational note:
+
+When Supabase persistence is unavailable or schema-drifted, some operator surfaces can fall back to local JSON artifacts so the admin and review views remain usable. This is a resilience measure, not evidence that persistence is fully healthy.
+
+---
+
+# Definition Of Done
+
+The project is only considered done for internal launch when all of the following are true:
+
+- A real pipeline run completes successfully from the current repo state
+- The pipeline persists the canonical vendor records to Supabase for the required paths
+- `outputs/directory_dataset.json` is generated from the canonical dataset
+- `outputs/vendor_review_dataset.json` and `outputs/vendor_review.html` are generated as review artifacts
+- The public landing page and vendor detail page render from generated data
+- The admin surface can inspect candidates, vendors, and runs
+- Operator actions for include, exclude, and rerun are functional and logged
+- Scheduler discovery and digest jobs are smoke-tested successfully
+- Containerized and devcontainer-oriented execution paths are verified or explicitly deferred and tracked
+- Documentation matches the real runtime behavior and configuration model
+- Verification scripts and milestone checks pass
+- No unresolved launch blocker remains hidden behind fallback behavior
 
 Weekly digest
 

@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-03-17T10:45:03.861222+00:00",
+  "role": "planner",
+  "prompt_path": "/home/chris/projects/AI_CustomerSuccess/docs/agents/planner_agent.md",
+  "milestone": {
+    "id": "M08",
+    "title": "Public directory experience",
+    "status": "not_started",
+    "dependencies": [
+      "M07"
+    ],
+    "verify": [
+      ".venv/bin/python -m pytest tests/test_directory_dataset.py",
+      "Local preview check of landing.html and vendor.html"
+    ],
+    "section_text": "## M08 Public directory experience\nStatus: `not_started`\n\nObjective:\nRender a static listing page and vendor profile page from exported data.\n\nAcceptance criteria:\n- Listing page renders real dataset rows\n- Vendor detail page resolves a vendor from the exported dataset\n- Filter and browse behavior works without a frontend framework\n\nVerification:\n- `.venv/bin/python -m pytest tests/test_directory_dataset.py`\n- Local preview check of `landing.html` and `vendor.html`"
+  },
+  "current_focus": "M08",
+  "context_files": [
+    "docs/product_design.md",
+    "docs/architecture.md",
+    "docs/codex_guardrails.md",
+    "docs/implementation_plan.md",
+    "README.md",
+    "config/pipeline_config.json",
+    "config/scheduler.toml"
+  ],
+  "changed_files": [],
+  "artifact_checks": [],
+  "checklist": [
+    "Restate the objective for M08",
+    "List acceptance criteria and proof requirements",
+    "Identify files likely to change",
+    "Identify tests to add or update",
+    "List manual/runtime checks required before closure"
+  ],
+  "runner_mode": "repo_native_local_packet",
+  "notes": "This runner generates structured local packets and does not call external AI services."
+}
