@@ -138,8 +138,10 @@ def _looks_like_article_title(text: str) -> bool:
     generic_name_hints = (
         "customer success platform",
         "customer success software",
+        "customer onboarding automation",
         "onboarding platform",
         "customer onboarding platform",
+        "customer health score",
     )
     if text in generic_name_hints:
         return True
@@ -156,10 +158,14 @@ def _looks_like_article_title(text: str) -> bool:
         "comparison",
         "guide",
         "guides",
+        "maximize ",
+        "maximizing",
         "how to",
+        "releases for",
         "review",
         "reviews",
         "top ",
+        "what is ",
         " vs ",
     )
     return any(hint in text for hint in article_hints)

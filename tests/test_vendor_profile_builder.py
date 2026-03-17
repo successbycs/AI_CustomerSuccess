@@ -80,3 +80,29 @@ def test_build_vendor_profile_falls_back_to_discovery_data_when_homepage_fields_
     assert result.source == "google_search"
     assert result.directory_fit == "medium"
     assert result.include_in_directory is True
+
+
+def test_build_vendor_profile_excludes_article_like_or_support_subdomain_vendors():
+    vendor = {
+        "vendor_name": "What is Customer Onboarding Automation?",
+        "website": "https://support.example.com",
+        "source": "google_search",
+    }
+    explored_pages = {
+        "homepage": {
+            "website": "https://support.example.com",
+            "text": "Support center article",
+        }
+    }
+    intelligence = VendorIntelligence(
+        vendor_name="What is Customer Onboarding Automation?",
+        website="https://support.example.com",
+        mission="403 Forbidden",
+        confidence="high",
+    )
+
+    result = build_vendor_profile(vendor, explored_pages, intelligence)
+
+    assert result.directory_fit == "low"
+    assert result.directory_category == "infra"
+    assert result.include_in_directory is False

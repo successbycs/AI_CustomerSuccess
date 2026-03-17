@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from services.extraction.directory_relevance import evaluate_directory_relevance
 from services.extraction.vendor_intel import VendorIntelligence
 
@@ -17,22 +19,28 @@ def build_vendor_profile(
     """Merge discovery metadata and extracted signals into one profile."""
     homepage_payload = explored_pages.get("homepage", {})
     evidence_urls = _collect_evidence_urls(explored_pages)
+    vendor_name = str(
+        homepage_payload.get("vendor_name")
+        or intelligence.vendor_name
+        or vendor.get("vendor_name")
+        or vendor.get("company_name")
+        or ""
+    )
+    website = str(
+        homepage_payload.get("website")
+        or homepage_payload.get("url")
+        or intelligence.website
+        or vendor.get("website", "")
+    )
     directory_fit, directory_category, include_in_directory = evaluate_directory_relevance(intelligence)
+    if _looks_like_invalid_directory_vendor(vendor_name, website, intelligence):
+        directory_fit = "low"
+        directory_category = "infra"
+        include_in_directory = False
 
     return VendorIntelligence(
-        vendor_name=str(
-            homepage_payload.get("vendor_name")
-            or intelligence.vendor_name
-            or vendor.get("vendor_name")
-            or vendor.get("company_name")
-            or ""
-        ),
-        website=str(
-            homepage_payload.get("website")
-            or homepage_payload.get("url")
-            or intelligence.website
-            or vendor.get("website", "")
-        ),
+        vendor_name=vendor_name,
+        website=website,
         source=vendor.get("source", intelligence.source),
         mission=intelligence.mission,
         usp=intelligence.usp,
@@ -75,3 +83,70 @@ def _iter_page_payloads(explored_pages: ExploredPages) -> list[PagePayload]:
                 if isinstance(item, dict):
                     page_payloads.append(item)
     return page_payloads
+
+
+def _looks_like_invalid_directory_vendor(
+    vendor_name: str,
+    website: str,
+    intelligence: VendorIntelligence,
+) -> bool:
+    """Return True when a profile still looks like content, docs, or blocked junk."""
+    lowered_name = vendor_name.strip().lower()
+    lowered_signal_text = " ".join(
+        [
+            intelligence.mission,
+            intelligence.usp,
+            *intelligence.use_cases,
+            *intelligence.value_statements,
+        ]
+    ).lower()
+    domain = urlparse(website).netloc.lower()
+
+    if any(marker in lowered_signal_text for marker in ("403 forbidden", "access denied", "just a moment")):
+        return True
+    if _looks_like_article_title(lowered_name):
+        return True
+    if _has_noise_subdomain(domain):
+        return True
+    if not intelligence.lifecycle_stages and not intelligence.use_cases and not intelligence.icp and not any(
+        hint in lowered_signal_text for hint in ("customer success", "renewal", "onboarding", "adoption", "churn")
+    ):
+        return True
+    return False
+
+
+def _looks_like_article_title(text: str) -> bool:
+    if not text:
+        return True
+    article_hints = (
+        "what is ",
+        "how to ",
+        "best ",
+        "top ",
+        "guide",
+        "blog",
+        "review",
+        "reviews",
+        "compare",
+        "comparison",
+        "maximizing",
+        "maximize ",
+        "releases for ",
+    )
+    return len(text.split()) > 5 or any(hint in text for hint in article_hints)
+
+
+def _has_noise_subdomain(domain: str) -> bool:
+    return domain.startswith(
+        (
+            "academy.",
+            "blog.",
+            "community.",
+            "developers.",
+            "docs.",
+            "help.",
+            "knowledge.",
+            "learn.",
+            "support.",
+        )
+    )

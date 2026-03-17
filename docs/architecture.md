@@ -75,6 +75,25 @@ drop_reason
 
 ---
 
+Candidate status values remain simple at the persisted candidate layer:
+
+new  
+filtered_out  
+queued_for_enrichment  
+enriched  
+dropped  
+failed  
+
+Phase 2 enrichment uses more explicit result statuses internally:
+
+enriched  
+dropped_low_confidence  
+dropped_non_cs_relevant  
+failed_fetch  
+failed_enrichment  
+
+---
+
 services/enrichment/
 
 Fetches vendor homepage content and explores high-signal vendor pages using Python requests.
@@ -142,11 +161,15 @@ Python sends vendor website text to the OpenAI API and receives structured JSON 
 
 mission  
 unique selling proposition  
+icp  
 expanded use cases  
 pricing signals  
 free trial signals  
 SOC2 mentions  
 founded information  
+case studies  
+customers  
+value statements  
 confidence score  
 
 merge_results.py
@@ -154,7 +177,8 @@ merge_results.py
 Combines the deterministic extraction results and the LLM extraction results into a single `VendorIntelligence` object.
 
 If the LLM call fails, deterministic results are still used.
-LLM output is used to fill gaps or add richer signals, but it does not replace stronger deterministic signals with empty or weaker values.
+LLM output is used to review and enrich the same core vendor fields as deterministic extraction, but vendor identity, lifecycle stages, and evidence URLs remain deterministic and system-owned.
+The merge keeps deterministic non-empty values unless the LLM clearly improves them, and it never replaces stronger deterministic signals with empty or weaker values.
 
 Vendors where:
 
@@ -197,7 +221,7 @@ onboarding automation → Onboard
 
 services/persistence/
 
-Contains `supabase_client.py`.
+Contains `supabase_client.py` and `run_store.py`.
 
 Provides:
 
@@ -216,6 +240,14 @@ gainsight.com
 www.gainsight.com  
 https://gainsight.com  
 
+`run_store.py` persists pipeline run records with explicit run status and error summary fields, and the local `outputs/pipeline_runs.json` file remains a fallback artifact for local/admin visibility.
+
+---
+
+services/discovery/discovery_store.py
+
+Persists Phase 1 discovery candidate records to Supabase so candidates and their statuses can be inspected later and rerun without treating them as enriched vendor profiles.
+
 ---
 
 services/export/
@@ -224,32 +256,56 @@ Handles human-facing outputs.
 
 google_sheets.py
 
-Appends new vendor rows to the Google Sheet used for browsing the vendor landscape.
+Publishes review-friendly Google Sheets tabs for operators.
 
-Worksheet name and export column order are loaded from `config/pipeline_config.json`.
+Worksheet names and export settings are loaded from `config/pipeline_config.json`.
 
-Current export columns:
+The main review tabs are:
 
-vendor_name  
-website  
-source  
-mission  
-usp  
-icp  
-use_cases  
-lifecycle_stages  
-pricing  
-free_trial  
-soc2  
-founded  
-case_studies  
-customers  
-value_statements  
-confidence  
-evidence_urls  
-directory_fit  
-directory_category  
-include_in_directory  
+Runs  
+Candidates  
+Vendors  
+
+directory_dataset.py
+
+Builds the deterministic public directory export from Supabase and writes:
+
+`outputs/directory_dataset.json`
+
+Only vendors with `include_in_directory = true` are included.
+
+vendor_review_dataset.py
+
+Builds a slim vendor review dataset from Supabase and current-run fallbacks and writes:
+
+`outputs/vendor_review_dataset.json`  
+`outputs/vendor_review.html`
+
+This keeps the public directory dataset separate from the operator-facing review output.
+
+---
+
+services/admin/
+
+admin_api.py
+
+Provides a thin read-only WSGI app exposing:
+
+/admin/candidates  
+/admin/vendors  
+/admin/runs  
+
+This is intended to support a later internal admin UI without requiring a full backend redesign first.
+
+services/admin/admin_actions.py
+
+Provides lightweight POST actions for:
+
+include vendor  
+exclude vendor  
+rerun enrichment  
+
+These actions are intentionally thin and operate on the existing persistence and enrichment flow.
 
 slack.py
 
@@ -361,15 +417,21 @@ python -m services.pipeline.scheduler --run-now digest
 
 11. Directory relevance scoring assigns fit, category, and include/exclude decisions.
 
-12. Lifecycle stages remain deterministic and are preserved in the enriched profile.
+12. Discovery candidate records are persisted for operations visibility and reruns.
 
-13. Each vendor object is persisted via `upsert_vendor()`.
+13. Lifecycle stages remain deterministic and are preserved in the enriched profile.
 
-14. Each vendor row is appended to Google Sheets.
+14. Each vendor object is persisted via `upsert_vendor()`.
 
-15. `run_digest()` queries vendors using the configured lookback window and posts a Slack digest grouped by lifecycle stage.
+15. Each vendor row is appended to Google Sheets.
 
-16. Vendors included in the digest have `is_new = FALSE`.
+16. The public directory dataset is exported to `outputs/directory_dataset.json`, using Supabase as the primary source and current-run included profiles as a fallback when persistence is unavailable.
+
+17. `run_digest()` queries vendors using the configured lookback window and posts a Slack digest grouped by lifecycle stage.
+
+18. Vendors included in the digest have `is_new = FALSE`.
+
+19. The admin dashboard reads `/admin/candidates`, `/admin/vendors`, and `/admin/runs`, and POSTs lightweight quality-control actions back to the same admin service.
 
 ---
 
@@ -378,6 +440,8 @@ python -m services.pipeline.scheduler --run-now digest
 Apify is used exclusively as a crawling utility.
 
 The Google Search actor, query list, crawl depth, result-filter heuristics, enrichment page rules, LLM runtime knobs, directory relevance hints, and Google Sheets export columns are loaded from `config/pipeline_config.json`.
+
+The scheduler still reads cron timing from `config/scheduler.toml`, but scheduled discovery queries now resolve from `config/pipeline_config.json` so scheduled and manual runs share the same discovery query surface.
 
 Apify does not:
 
@@ -501,3 +565,9 @@ Repo-level config files currently used by the running system:
 
 `config/pipeline_config.json`  
 `config/scheduler.toml`  
+
+Container entrypoint:
+
+`Dockerfile` runs `python -m services.admin.admin_api --host 0.0.0.0 --port 8000`
+
+This makes the admin API and static admin dashboard available from the same container port.

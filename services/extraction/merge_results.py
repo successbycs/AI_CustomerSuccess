@@ -17,14 +17,23 @@ def merge_vendor_intelligence(
 
     merged_mission = _prefer_text_value(deterministic.mission, llm_result.mission)
     merged_usp = _prefer_text_value(deterministic.usp, llm_result.usp)
+    merged_icp = _merge_unique_strings(deterministic.icp, llm_result.icp)
     merged_use_cases = _merge_unique_strings(deterministic.use_cases, llm_result.use_cases)
-    merged_pricing = _merge_unique_strings(deterministic.pricing, _pricing_to_signals(llm_result.pricing))
+    merged_pricing = _merge_unique_strings(deterministic.pricing, llm_result.pricing)
+    merged_case_studies = _merge_unique_strings(deterministic.case_studies, llm_result.case_studies)
+    merged_customers = _merge_unique_strings(deterministic.customers, llm_result.customers)
     merged_value_statements = _merge_unique_strings(
         deterministic.value_statements,
+        llm_result.value_statements,
         vendor_intel._extract_value_statements(_build_signal_text(  # noqa: SLF001
             mission=merged_mission,
             usp=merged_usp,
+            icp=merged_icp,
             use_cases=merged_use_cases,
+            case_studies=merged_case_studies,
+            customers=merged_customers,
+            pricing=merged_pricing,
+            value_statements=llm_result.value_statements,
         ).lower()),
     )
 
@@ -34,15 +43,15 @@ def merge_vendor_intelligence(
         source=deterministic.source,
         mission=merged_mission,
         usp=merged_usp,
-        icp=deterministic.icp,
+        icp=merged_icp,
         use_cases=merged_use_cases,
         lifecycle_stages=deterministic.lifecycle_stages,
         pricing=merged_pricing,
         free_trial=_prefer_optional_bool(deterministic.free_trial, llm_result.free_trial),
         soc2=_prefer_optional_bool(deterministic.soc2, llm_result.soc2),
         founded=_prefer_text_value(deterministic.founded, llm_result.founded),
-        case_studies=deterministic.case_studies,
-        customers=deterministic.customers,
+        case_studies=merged_case_studies,
+        customers=merged_customers,
         value_statements=merged_value_statements,
         confidence=_prefer_confidence(deterministic.confidence, llm_result.confidence),
         evidence_urls=deterministic.evidence_urls,
@@ -100,19 +109,18 @@ def _build_signal_text(
     *,
     mission: str = "",
     usp: str = "",
+    icp: list[str] | None = None,
     use_cases: list[str] | None = None,
+    pricing: list[str] | None = None,
+    case_studies: list[str] | None = None,
+    customers: list[str] | None = None,
     value_statements: list[str] | None = None,
 ) -> str:
     parts = [mission, usp]
+    parts.extend(icp or [])
     parts.extend(use_cases or [])
+    parts.extend(pricing or [])
+    parts.extend(case_studies or [])
+    parts.extend(customers or [])
     parts.extend(value_statements or [])
     return " ".join(part for part in parts if part).strip()
-
-
-def _pricing_to_signals(pricing: str) -> list[str]:
-    """Convert a short LLM pricing summary into deterministic signal strings."""
-    if not pricing.strip():
-        return []
-
-    normalized = pricing.replace("\n", "|").replace(",", "|")
-    return [segment.strip() for segment in normalized.split("|") if segment.strip()]

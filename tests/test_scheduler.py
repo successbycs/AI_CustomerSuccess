@@ -1,6 +1,7 @@
 """Tests for scheduled discovery query resolution."""
 
-from services.discovery.discovery_config import GoogleSearchConfig
+from types import SimpleNamespace
+
 from services.pipeline import scheduler
 
 
@@ -9,7 +10,7 @@ def test_run_discovery_job_uses_configured_queries(monkeypatch):
     monkeypatch.delenv("DISCOVERY_QUERY", raising=False)
     monkeypatch.setattr(
         scheduler,
-        "load_google_search_config",
+        "load_pipeline_config",
         lambda: _config_with_queries("query one", "query two"),
     )
 
@@ -58,4 +59,4 @@ def test_run_discovery_job_falls_back_to_single_env_query(monkeypatch):
 
 
 def _config_with_queries(*queries: str):
-    return GoogleSearchConfig(queries=queries)
+    return SimpleNamespace(discovery=SimpleNamespace(queries=queries))

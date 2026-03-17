@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 from typing import Callable
 
@@ -39,32 +40,54 @@ def run_enrichment_phase(
     for vendor in queued_vendor_candidates:
         vendor_name = vendor["vendor_name"]
         logger.info("Phase 2 enrichment crawl for vendor: %s", vendor_name)
-        homepage_payload = fetch_vendor_homepage_fn(vendor)
+        try:
+            homepage_payload = fetch_vendor_homepage_fn(vendor)
+        except Exception as error:
+            logger.warning("Homepage fetch failed for %s: %s", vendor_name, error)
+            enrichment_results.append(
+                {
+                    "candidate_domain": vendor.get("candidate_domain", ""),
+                    "status": "failed_fetch",
+                    "drop_reason": "homepage_fetch_failed",
+                }
+            )
+            continue
         try:
             explored_pages = explore_vendor_site_fn(homepage_payload)
         except Exception as error:
             logger.warning("Site exploration failed for %s, using homepage only: %s", vendor_name, error)
             explored_pages = {"homepage": homepage_payload, "extra_pages": []}
+        try:
+            deterministic_intelligence = extract_vendor_intelligence_fn(explored_pages)
+            llm_result = extract_vendor_intelligence_llm_fn(explored_pages)
+            if llm_result is None:
+                llm_fallback_count += 1
+            else:
+                llm_success_count += 1
 
-        deterministic_intelligence = extract_vendor_intelligence_fn(explored_pages)
-        llm_result = extract_vendor_intelligence_llm_fn(explored_pages)
-        if llm_result is None:
-            llm_fallback_count += 1
-        else:
-            llm_success_count += 1
-
-        intelligence = merge_vendor_intelligence_fn(deterministic_intelligence, llm_result)
-        profile = build_vendor_profile_fn(vendor, explored_pages, intelligence)
-        drop_reason = drop_reason_fn(profile, llm_result)
+            intelligence = merge_vendor_intelligence_fn(deterministic_intelligence, llm_result)
+            profile = build_vendor_profile_fn(vendor, explored_pages, intelligence)
+            drop_reason = drop_reason_fn(profile, llm_result)
+        except Exception as error:
+            logger.warning("Phase 2 enrichment failed for %s: %s", vendor_name, error)
+            enrichment_results.append(
+                {
+                    "candidate_domain": vendor.get("candidate_domain", ""),
+                    "status": "failed_enrichment",
+                    "drop_reason": str(error),
+                }
+            )
+            continue
 
         if drop_reason:
             logger.info("Dropping vendor %s during Phase 2: %s", profile.vendor_name, drop_reason)
             enrichment_results.append(
                 {
                     "candidate_domain": vendor.get("candidate_domain", ""),
-                    "status": "failed",
+                    "status": _drop_status(drop_reason),
                     "drop_reason": drop_reason,
                     "profile": profile,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             continue
@@ -79,14 +102,31 @@ def run_enrichment_phase(
                 else:
                     raise
 
-        vendor_rows.append(vendor_intelligence_to_sheet_row_fn(profile))
+        if profile.include_in_directory is True:
+            vendor_rows.append(vendor_intelligence_to_sheet_row_fn(profile))
+        else:
+            logger.info(
+                "Skipping Google Sheets export for %s because include_in_directory=%s",
+                profile.vendor_name,
+                profile.include_in_directory,
+            )
         enrichment_results.append(
             {
                 "candidate_domain": vendor.get("candidate_domain", ""),
                 "status": "enriched",
                 "drop_reason": "",
                 "profile": profile,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 
     return vendor_rows, enrichment_results, llm_success_count, llm_fallback_count
+
+
+def _drop_status(drop_reason: str) -> str:
+    lowered_reason = drop_reason.strip().lower()
+    if "non_cs_relevant" in lowered_reason:
+        return "dropped_non_cs_relevant"
+    if "low_confidence" in lowered_reason:
+        return "dropped_low_confidence"
+    return "dropped"

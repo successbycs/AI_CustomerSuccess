@@ -87,6 +87,10 @@ class LLMConfig:
 class GoogleSheetsConfig:
     worksheet_name: str
     columns: tuple[str, ...]
+    ops_review_enabled: bool
+    runs_worksheet_name: str
+    candidates_worksheet_name: str
+    vendors_worksheet_name: str
 
 
 @dataclass(frozen=True)
@@ -203,9 +207,26 @@ def _load_llm_config(raw_config: dict[str, object], config_path: Path) -> LLMCon
 def _load_google_sheets_config(raw_config: dict[str, object], config_path: Path) -> GoogleSheetsConfig:
     sheets_config = _require_dict(raw_config, "google_sheets", config_path)
     columns = sheets_config.get("columns", list(DEFAULT_GOOGLE_SHEETS_COLUMNS))
+    ops_review_enabled = sheets_config.get("ops_review_enabled", True)
+    if not isinstance(ops_review_enabled, bool):
+        raise RuntimeError(f"Pipeline config at {config_path} has invalid google_sheets.ops_review_enabled")
     return GoogleSheetsConfig(
         worksheet_name=_get_string(sheets_config, "worksheet_name", "vendors", config_path),
         columns=_coerce_string_tuple(columns, config_path, "google_sheets.columns"),
+        ops_review_enabled=ops_review_enabled,
+        runs_worksheet_name=_get_string(sheets_config, "runs_worksheet_name", "runs", config_path),
+        candidates_worksheet_name=_get_string(
+            sheets_config,
+            "candidates_worksheet_name",
+            "candidates",
+            config_path,
+        ),
+        vendors_worksheet_name=_get_string(
+            sheets_config,
+            "vendors_worksheet_name",
+            "vendors",
+            config_path,
+        ),
     )
 
 

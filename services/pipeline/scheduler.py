@@ -11,11 +11,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from services.discovery.discovery_config import (
-    DEFAULT_GOOGLE_SEARCH_QUERIES,
-    load_google_search_config,
-    parse_google_search_queries,
-)
+from services.config.load_config import load_pipeline_config
 from services.pipeline.scheduler_config import load_scheduler_config
 from services.pipeline.run_mvp_pipeline import run_mvp_pipeline
 
@@ -141,7 +137,7 @@ def _load_scheduled_discovery_queries() -> list[str]:
     """Resolve scheduled discovery queries from env overrides or repo config."""
     env_queries = os.getenv("DISCOVERY_QUERIES")
     if env_queries:
-        parsed_queries = parse_google_search_queries(env_queries)
+        parsed_queries = [query.strip() for query in env_queries.split(",") if query.strip()]
         if parsed_queries:
             return parsed_queries
 
@@ -149,11 +145,11 @@ def _load_scheduled_discovery_queries() -> list[str]:
     if env_query:
         return [env_query.strip()]
 
-    config_queries = list(load_google_search_config().queries)
+    config_queries = list(load_pipeline_config().discovery.queries)
     if config_queries:
         return config_queries
 
-    return list(DEFAULT_GOOGLE_SEARCH_QUERIES)
+    return ["ai customer success platform"]
 
 
 def main() -> int:

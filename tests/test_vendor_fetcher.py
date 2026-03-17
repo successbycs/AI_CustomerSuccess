@@ -123,6 +123,34 @@ def test_fetch_vendor_homepage_uses_domain_fallback_when_homepage_name_is_weak(m
     assert result["vendor_name"] == "Usepylon"
 
 
+def test_fetch_vendor_homepage_uses_domain_fallback_for_what_is_titles(monkeypatch):
+    class MockResponse:
+        def __init__(self, status_code, text):
+            self.status_code = status_code
+            self.text = text
+
+    def mock_get(url, timeout=None):
+        return MockResponse(
+            200,
+            (
+                "<html><head><title>What is Customer Onboarding Automation?</title></head>"
+                "<body><h1>Customer Onboarding Automation</h1></body></html>"
+            ),
+        )
+
+    monkeypatch.setattr(vendor_fetcher.requests, "get", mock_get)
+
+    vendor = {
+        "vendor_name": "What is Customer Onboarding Automation?",
+        "website": "https://onramp.us",
+        "source": "web_search",
+    }
+
+    result = vendor_fetcher.fetch_vendor_homepage(vendor)
+
+    assert result["vendor_name"] == "Onramp"
+
+
 def test_fetch_vendor_homepage_skips_error_and_interstitial_pages(monkeypatch):
     class MockResponse:
         def __init__(self, status_code, text):

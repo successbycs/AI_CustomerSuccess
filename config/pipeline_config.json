@@ -122,11 +122,15 @@
       "voc"
     ],
     "noise_subdomain_prefixes": [
+      "academy.",
       "blog.",
       "careers.",
       "community.",
+      "docs.",
+      "help.",
       "jobs.",
-      "newsletter."
+      "newsletter.",
+      "support."
     ],
     "noise_domain_hints": [
       "greenhouse",
@@ -224,6 +228,10 @@
   },
   "google_sheets": {
     "worksheet_name": "vendors",
+    "ops_review_enabled": true,
+    "runs_worksheet_name": "runs",
+    "candidates_worksheet_name": "candidates",
+    "vendors_worksheet_name": "vendors",
     "columns": [
       "vendor_name",
       "website",

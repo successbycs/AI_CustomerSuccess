@@ -57,6 +57,10 @@ def test_load_pipeline_config_reads_required_sections(tmp_path: Path):
           },
           "google_sheets": {
             "worksheet_name": "vendors",
+            "ops_review_enabled": true,
+            "runs_worksheet_name": "runs",
+            "candidates_worksheet_name": "candidates",
+            "vendors_worksheet_name": "vendors",
             "columns": ["vendor_name", "website", "source"]
           }
         }
@@ -71,6 +75,7 @@ def test_load_pipeline_config_reads_required_sections(tmp_path: Path):
     assert result.directory_relevance.core_stages == ("Onboard", "Renew")
     assert result.llm.model == "gpt-5-mini"
     assert result.google_sheets.columns == ("vendor_name", "website", "source")
+    assert result.google_sheets.ops_review_enabled is True
 
 
 def test_load_pipeline_config_fails_clearly_for_missing_sections(tmp_path: Path):

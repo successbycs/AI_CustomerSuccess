@@ -22,7 +22,16 @@ The system produces a continuously updated dataset of AI-enabled Customer Succes
 
 The canonical dataset lives in Supabase.
 
-Google Sheets is a human-readable export layer used for browsing and sharing the vendor landscape.
+Google Sheets is an ops-facing review layer used to inspect runs, discovery candidates, and enriched vendors in a readable format.
+
+The public directory is driven by a deterministic static export built from Supabase:
+
+`outputs/directory_dataset.json`
+
+The pipeline also produces a slim operator review dataset and a self-contained visual report:
+
+`outputs/vendor_review_dataset.json`  
+`outputs/vendor_review.html`
 
 Each vendor row contains fields such as:
 
@@ -172,11 +181,17 @@ Python classifies lifecycle stages
 ↓  
 Python assigns directory relevance labels and include/exclude decisions  
 ↓  
-Vendors marked non-relevant or low-confidence are dropped  
+Vendors marked non-relevant or low-confidence are dropped with explicit drop statuses  
 ↓  
-Python upserts to Supabase  
+Python upserts included vendor intelligence into Supabase  
 ↓  
-Python appends row to Google Sheets
+Python persists pipeline run tracking and candidate status updates  
+↓  
+Python updates Google Sheets review tabs for runs, candidates, and enriched vendors  
+↓  
+Python exports `outputs/directory_dataset.json`
+↓
+Python exports `outputs/vendor_review_dataset.json` and `outputs/vendor_review.html`
 
 Weekly digest
 
@@ -284,6 +299,25 @@ candidate_status
 status  
 discovery_notes  
 drop_reason  
+
+These candidate records are persisted for operations visibility and reruns.
+
+Candidate status values remain simple and operator-friendly:
+
+new  
+filtered_out  
+queued_for_enrichment  
+enriched  
+dropped  
+failed  
+
+Phase 2 enrichment uses more explicit result statuses internally so the system can distinguish policy drops from technical failures:
+
+enriched  
+dropped_low_confidence  
+dropped_non_cs_relevant  
+failed_fetch  
+failed_enrichment  
 
 ---
 
@@ -501,11 +535,15 @@ The LLM returns structured JSON containing:
 
 mission  
 usp  
+icp  
 use_cases  
 pricing  
 free_trial  
 soc2  
 founded  
+case_studies  
+customers  
+value_statements  
 confidence  
 
 Example structure
@@ -514,11 +552,15 @@ Example structure
   "is_cs_relevant": true,
   "mission": "...",
   "usp": "...",
+  "icp": [],
   "use_cases": [],
-  "pricing": "...",
+  "pricing": [],
   "free_trial": true,
   "soc2": false,
   "founded": "...",
+  "case_studies": [],
+  "customers": [],
+  "value_statements": [],
   "confidence": "high"
 }
 
@@ -530,6 +572,7 @@ confidence = low
 the vendor is dropped.
 
 Lifecycle stage classification is handled by Python using the extracted signals.
+The LLM acts as a second-pass reviewer/enricher across the same core vendor fields as deterministic extraction, but vendor identity, lifecycle stages, and evidence URLs remain Python-owned.
 If the LLM call fails, deterministic extraction still produces the vendor profile.
 
 ---
@@ -581,23 +624,40 @@ Upserts use:
 
 ON CONFLICT (website) DO UPDATE
 
-The running system currently keeps discovery candidates as explicit Phase 1 records in code and persists enriched vendor profiles to Supabase in Phase 2.
+The running system now distinguishes:
+
+Phase 1 discovery candidates persisted for review and reruns  
+Phase 2 enriched vendor profiles persisted for the canonical dataset  
+
+Manual directory overrides can be applied with:
+
+`scripts/admin_update_vendor.py`
 
 ---
 
-# Google Sheets Export
+# Directory Dataset Export
 
-Google Sheets is a human-readable export layer.
+The public directory uses a deterministic export built from Supabase.
 
-The worksheet name and export column order are repo-configured in:
+Implementation
 
-`config/pipeline_config.json`
+services/export/directory_dataset.py  
+scripts/export_directory_dataset.py  
 
-Columns
+Only vendors where:
+
+include_in_directory = true  
+
+are exported.
+
+Output file
+
+`outputs/directory_dataset.json`
+
+Export fields
 
 vendor_name  
 website  
-source  
 mission  
 usp  
 icp  
@@ -614,9 +674,104 @@ confidence
 evidence_urls  
 directory_fit  
 directory_category  
-include_in_directory  
+
+The export is sorted alphabetically by vendor_name and written deterministically.
+
+---
+
+# Google Sheets Export
+
+Google Sheets is the ops-facing review layer, not the public directory dataset.
+
+The worksheet names and export behavior are repo-configured in:
+
+`config/pipeline_config.json`
+
+The primary operator-facing tabs are:
+
+Runs  
+shows one compact row per pipeline run with counts, run status, and error summary
+
+Candidates  
+shows discovery candidates with source query, status, and drop reason
+
+Vendors  
+shows enriched vendor summaries with lifecycle stages, directory fit, include flag, pricing summary, mission summary, and evidence count
 
 Python authenticates using a service account.
+
+Google Sheets remains the ops-facing review layer.
+The public directory reads `outputs/directory_dataset.json`.
+
+---
+
+# Static Directory Pages
+
+The near-launch directory experience is implemented as a static site in:
+
+`docs/website/landing.html`  
+`docs/website/directory.js`  
+`docs/website/vendor.html`  
+`docs/website/vendor.js`  
+
+The listing page loads `outputs/directory_dataset.json`, renders real vendor cards, and supports client-side:
+
+search by vendor name  
+filter by lifecycle stage  
+filter by directory category  
+filter by free trial  
+filter by SOC2  
+
+Vendor profile pages load the same dataset and render a detailed per-vendor view.
+
+---
+
+# Thin Admin Operations Layer
+
+The system now includes lightweight internal operations tooling without a full admin panel.
+
+Manual override script
+
+`scripts/admin_update_vendor.py`
+
+Supports manual updates for:
+
+include_in_directory  
+directory_fit  
+directory_category  
+
+Read-only admin API
+
+`services/admin/admin_api.py`
+
+Endpoints:
+
+/admin/candidates  
+/admin/vendors  
+/admin/runs  
+
+Static admin dashboard
+
+`docs/website/admin.html`
+
+This dashboard visualises:
+
+discovery candidates  
+enriched vendors  
+pipeline runs  
+
+and can trigger lightweight include, exclude, and rerun-enrichment actions through the admin API.
+
+---
+
+# Container Compatibility
+
+The project now includes a simple container path for consistent development and deployment:
+
+`Dockerfile`  
+`.dockerignore`
+
+The container serves the admin API and static admin dashboard from one process so internal operations can be accessed on a single port.
 
 ---
 

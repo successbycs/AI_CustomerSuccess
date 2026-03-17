@@ -410,3 +410,71 @@ def test_append_rows_to_google_sheet_inserts_header_row_when_first_row_is_data(m
         "body": {"values": [google_sheets.GOOGLE_SHEETS_COLUMNS]},
     }]
     assert fake_recorder["append_kwargs"]["range"] == "directory_ops!A:T"
+
+
+def test_publish_ops_review_export_writes_runs_candidates_and_vendors_tabs(monkeypatch):
+    monkeypatch.setattr(
+        google_sheets,
+        "append_rows_to_google_sheet_tab",
+        lambda rows, *, worksheet_name=None, columns=None: recorded.append(
+            (worksheet_name, list(columns or []), rows)
+        ),
+    )
+    recorded = []
+
+    profile = VendorIntelligence(
+        vendor_name="ExampleCorp",
+        website="https://example.com",
+        source="google_search",
+        mission="ExampleCorp helps customer success teams reduce churn and improve adoption.",
+        use_cases=["health scoring", "renewal management", "onboarding automation"],
+        pricing=["contact sales", "per seat"],
+        free_trial=True,
+        soc2=True,
+        founded="2021",
+        confidence="high",
+        evidence_urls=["https://example.com", "https://example.com/pricing"],
+        lifecycle_stages=["Onboard", "Renew"],
+        directory_fit="high",
+        directory_category="cs_core",
+        include_in_directory=True,
+    )
+
+    google_sheets.publish_ops_review_export(
+        run_record={
+            "run_id": "run-1",
+            "started_at": "2026-03-16T00:00:00+00:00",
+            "completed_at": "2026-03-16T00:10:00+00:00",
+            "queries_executed": "query one",
+            "candidate_count": 10,
+            "queued_count": 5,
+            "enriched_count": 3,
+            "dropped_count": 2,
+            "run_status": "completed_with_warnings",
+            "error_summary": "",
+        },
+        candidate_records=[
+            {
+                "candidate_domain": "example.com",
+                "candidate_title": "ExampleCorp",
+                "source_query": "query one",
+                "source_rank": 1,
+                "candidate_status": "enriched",
+                "drop_reason": "",
+                "discovered_at": "2026-03-16T00:00:00+00:00",
+            }
+        ],
+        enrichment_results=[
+            {
+                "status": "enriched",
+                "candidate_domain": "example.com",
+                "profile": profile,
+                "completed_at": "2026-03-16T00:09:00+00:00",
+            }
+        ],
+    )
+
+    assert [item[0] for item in recorded] == ["runs", "candidates", "vendors"]
+    assert recorded[0][2][0]["run_status"] == "completed_with_warnings"
+    assert recorded[1][2][0]["candidate_status"] == "enriched"
+    assert recorded[2][2][0]["mission_summary"].startswith("ExampleCorp helps customer success teams")

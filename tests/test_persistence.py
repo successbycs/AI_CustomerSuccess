@@ -87,3 +87,12 @@ def test_build_vendor_row_uses_extracted_vendor_fields():
     assert row["founded"] == "2021"
     assert row["use_cases"] == ["onboarding", "churn prevention"]
     assert row["lifecycle_stages"] == ["Onboard", "Renew"]
+
+
+def test_is_persistence_unavailable_error_handles_missing_vendor_columns():
+    class FakeError(Exception):
+        code = ""
+
+    error = FakeError("column cs_vendors.icp does not exist")
+
+    assert supabase_client.is_persistence_unavailable_error(error) is True

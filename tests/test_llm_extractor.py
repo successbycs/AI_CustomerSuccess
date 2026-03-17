@@ -78,9 +78,12 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
                 "output_text": (
                     '{"is_cs_relevant": true, "mission": "Reduce churn for customer success teams.", '
                     '"usp": "Predict churn before it happens.", '
+                    '"icp": ["SaaS companies", "customer success teams"], '
                     '"use_cases": ["churn prediction", "renewal forecasting"], '
-                    '"pricing": "contact sales | per seat", '
-                    '"free_trial": false, "soc2": true, "founded": "2022", "confidence": "high"}'
+                    '"pricing": ["contact sales", "per seat"], '
+                    '"free_trial": false, "soc2": true, "founded": "2022", '
+                    '"case_studies": ["case study"], "customers": ["Acme"], '
+                    '"value_statements": ["reduce churn"], "confidence": "high"}'
                 )
             }
         )
@@ -103,16 +106,20 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
     assert captured_request["url"] == llm_extractor.OPENAI_API_URL
     assert captured_request["timeout"] == 45
     assert "temperature" not in captured_request["json"]
-    assert captured_request["json"]["input"][1]["content"][0]["text"].startswith("Extract vendor intelligence")
+    assert captured_request["json"]["input"][1]["content"][0]["text"].startswith("Review this crawled website evidence")
     assert captured_request["json"]["text"]["format"]["type"] == "json_schema"
     assert result.is_cs_relevant is True
     assert result.mission == "Reduce churn for customer success teams."
     assert result.usp == "Predict churn before it happens."
+    assert result.icp == ["SaaS companies", "customer success teams"]
     assert result.use_cases == ["churn prediction", "renewal forecasting"]
-    assert result.pricing == "contact sales | per seat"
+    assert result.pricing == ["contact sales", "per seat"]
     assert result.free_trial is False
     assert result.soc2 is True
     assert result.founded == "2022"
+    assert result.case_studies == ["case study"]
+    assert result.customers == ["Acme"]
+    assert result.value_statements == ["reduce churn"]
     assert result.confidence == "high"
 
 
@@ -153,8 +160,11 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
                                 "text": (
                                     '{"is_cs_relevant": true, "mission": "Improve adoption.", '
                                     '"usp": "Lifecycle intelligence.", '
-                                    '"use_cases": ["onboarding"], "pricing": "contact sales", '
-                                    '"free_trial": null, "soc2": true, "founded": "2021", "confidence": "medium"}'
+                                    '"icp": ["customer success teams"], '
+                                    '"use_cases": ["onboarding"], "pricing": ["contact sales"], '
+                                    '"free_trial": null, "soc2": true, "founded": "2021", '
+                                    '"case_studies": [], "customers": [], "value_statements": [], '
+                                    '"confidence": "medium"}'
                                 ),
                             }
                         ]
@@ -166,6 +176,7 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
 
     assert result is not None
     assert result.mission == "Improve adoption."
+    assert result.icp == ["customer success teams"]
     assert result.confidence == "medium"
 
 
@@ -196,7 +207,7 @@ def test_extract_vendor_intelligence_disables_llm_after_first_client_error(monke
     assert call_count["count"] == 1
 
 
-def test_extract_vendor_intelligence_normalizes_list_pricing_to_string(monkeypatch):
+def test_extract_vendor_intelligence_normalizes_list_fields(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     result = llm_extractor.extract_vendor_intelligence(
@@ -205,15 +216,26 @@ def test_extract_vendor_intelligence_normalizes_list_pricing_to_string(monkeypat
             {
                 "output_text": (
                     '{"is_cs_relevant": true, "mission": "", "usp": "", '
-                    '"use_cases": [], "pricing": ["contact sales", "annual pricing"], '
-                    '"free_trial": null, "soc2": null, "founded": "", "confidence": "medium"}'
+                    '"icp": "SaaS companies|Mid-market", '
+                    '"use_cases": "onboarding,health scoring", '
+                    '"pricing": ["contact sales", "annual pricing"], '
+                    '"free_trial": null, "soc2": null, "founded": "", '
+                    '"case_studies": "case study|customer story", '
+                    '"customers": "Acme, Beta", '
+                    '"value_statements": "reduce churn|improve adoption", '
+                    '"confidence": "medium"}'
                 )
             }
         ),
     )
 
     assert result is not None
-    assert result.pricing == "contact sales | annual pricing"
+    assert result.icp == ["SaaS companies", "Mid-market"]
+    assert result.use_cases == ["onboarding", "health scoring"]
+    assert result.pricing == ["contact sales", "annual pricing"]
+    assert result.case_studies == ["case study", "customer story"]
+    assert result.customers == ["Acme", "Beta"]
+    assert result.value_statements == ["reduce churn", "improve adoption"]
 
 
 def test_build_site_text_truncates_each_page_and_total_size():

@@ -27,12 +27,15 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
         source="google_search",
         mission="Baseline mission",
         usp="Baseline usp",
+        icp=["SaaS companies"],
         use_cases=["health scoring"],
         lifecycle_stages=["Adopt"],
         pricing=["contact sales"],
         free_trial=None,
         soc2=None,
         founded="",
+        case_studies=["case study"],
+        customers=["Acme"],
         value_statements=["improve customer health"],
         confidence="medium",
         evidence_urls=["https://example.com"],
@@ -41,11 +44,15 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
         is_cs_relevant=True,
         mission="AI customer success platform that reduces churn and automates onboarding.",
         usp="Predict churn and speed time to value.",
+        icp=["customer success teams"],
         use_cases=["churn prediction", "onboarding automation"],
-        pricing="per seat",
+        pricing=["per seat"],
         free_trial=True,
         soc2=True,
         founded="2024",
+        case_studies=["customer story"],
+        customers=["Beta"],
+        value_statements=["reduce churn"],
         confidence="high",
     )
 
@@ -55,12 +62,16 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
     assert merged.website == "https://example.com"
     assert merged.mission == "AI customer success platform that reduces churn and automates onboarding."
     assert merged.usp == "Predict churn and speed time to value."
+    assert merged.icp == ["SaaS companies", "customer success teams"]
     assert merged.use_cases == ["health scoring", "churn prediction", "onboarding automation"]
     assert merged.lifecycle_stages == ["Adopt"]
     assert merged.pricing == ["contact sales", "per seat"]
     assert merged.free_trial is True
     assert merged.soc2 is True
     assert merged.founded == "2024"
+    assert merged.case_studies == ["case study", "customer story"]
+    assert merged.customers == ["Acme", "Beta"]
+    assert "reduce churn" in merged.value_statements
     assert merged.confidence == "high"
     assert merged.evidence_urls == ["https://example.com"]
 
@@ -71,12 +82,15 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
         website="https://example.com",
         mission="Customer success platform for onboarding and renewals.",
         usp="Reduce churn for CS teams.",
+        icp=["SaaS companies"],
         use_cases=["renewal forecasting"],
         lifecycle_stages=["Renew"],
         pricing=["contact sales"],
         free_trial=True,
         soc2=True,
         founded="2020",
+        case_studies=["case study"],
+        customers=["Acme"],
         value_statements=["reduce churn"],
         confidence="medium",
         evidence_urls=["https://example.com"],
@@ -85,11 +99,15 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
         is_cs_relevant=True,
         mission="Short summary.",
         usp="Short usp.",
+        icp=["support teams"],
         use_cases=["onboarding automation"],
-        pricing="per seat",
+        pricing=["per seat"],
         free_trial=False,
         soc2=False,
         founded="",
+        case_studies=["customer story"],
+        customers=["Beta"],
+        value_statements=["improve adoption"],
         confidence="low",
     )
 
@@ -97,9 +115,13 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
 
     assert merged.mission == deterministic.mission
     assert merged.usp == deterministic.usp
+    assert merged.icp == ["SaaS companies", "support teams"]
     assert merged.use_cases == ["renewal forecasting", "onboarding automation"]
     assert merged.pricing == ["contact sales", "per seat"]
     assert merged.free_trial is True
     assert merged.soc2 is True
     assert merged.founded == "2020"
+    assert merged.case_studies == ["case study", "customer story"]
+    assert merged.customers == ["Acme", "Beta"]
+    assert "improve adoption" in merged.value_statements
     assert merged.confidence == "medium"

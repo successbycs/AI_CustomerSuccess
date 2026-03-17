@@ -32,25 +32,48 @@ LLM_RESULT_SCHEMA = {
         "is_cs_relevant": {"type": "boolean"},
         "mission": {"type": "string"},
         "usp": {"type": "string"},
+        "icp": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
         "use_cases": {
             "type": "array",
             "items": {"type": "string"},
         },
-        "pricing": {"type": "string"},
+        "pricing": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
         "free_trial": {"type": ["boolean", "null"]},
         "soc2": {"type": ["boolean", "null"]},
         "founded": {"type": "string"},
+        "case_studies": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "customers": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "value_statements": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
         "confidence": {"type": "string"},
     },
     "required": [
         "is_cs_relevant",
         "mission",
         "usp",
+        "icp",
         "use_cases",
         "pricing",
         "free_trial",
         "soc2",
         "founded",
+        "case_studies",
+        "customers",
+        "value_statements",
         "confidence",
     ],
     "additionalProperties": False,
@@ -64,11 +87,15 @@ class LLMExtractionResult:
     is_cs_relevant: bool = True
     mission: str = ""
     usp: str = ""
+    icp: list[str] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)
-    pricing: str = ""
+    pricing: list[str] = field(default_factory=list)
     free_trial: bool | None = None
     soc2: bool | None = None
     founded: str = ""
+    case_studies: list[str] = field(default_factory=list)
+    customers: list[str] = field(default_factory=list)
+    value_statements: list[str] = field(default_factory=list)
     confidence: str = ""
 
 
@@ -157,11 +184,13 @@ def extract_vendor_intelligence(
                     {
                         "type": "input_text",
                         "text": (
-                            "You extract vendor-level commercial intelligence for an AI Customer Success vendor directory. "
-                            "Be conservative. Mark is_cs_relevant false unless the company clearly sells software or "
-                            "AI-enabled products relevant to the customer success lifecycle. "
+                            "You review vendor-level website evidence for an AI Customer Success vendor directory. "
+                            "Be conservative. Use only the provided website text bundle. "
+                            "Do not invent unsupported claims. Leave fields empty when the evidence is weak or missing. "
+                            "Mark is_cs_relevant false unless the company clearly sells software or AI-enabled products "
+                            "relevant to the customer success lifecycle. "
                             'Confidence must be one of "low", "medium", or "high". '
-                            "Do not include lifecycle stages."
+                            "Lifecycle stages are not part of this task."
                         ),
                     }
                 ],
@@ -172,13 +201,15 @@ def extract_vendor_intelligence(
                     {
                         "type": "input_text",
                         "text": (
-                            "Extract vendor intelligence from this website text.\n"
+                            "Review this crawled website evidence and extract vendor intelligence.\n"
                             "Return the structured result using the provided schema.\n"
                             "Requirements:\n"
-                            "- use_cases must be an array of short strings\n"
-                            "- pricing must be a short pricing summary string capturing signals like contact sales, per seat, per user, or annual pricing\n"
+                            "- icp, use_cases, case_studies, customers, and value_statements must be arrays of short strings\n"
+                            "- pricing must be an array of short pricing signals like contact sales, per seat, per user, per month, or per year\n"
                             "- founded should be a year or short founded string if present, else empty string\n"
                             "- booleans should be true, false, or null\n"
+                            "- do not invent claims that are not supported by the evidence\n"
+                            "- leave uncertain text fields empty rather than guessing\n"
                             "- confidence should reflect certainty that this is a relevant AI-enabled Customer Success vendor\n\n"
                             f"Website text:\n{site_text}"
                         ),
@@ -325,11 +356,15 @@ def _parse_result(content: str) -> LLMExtractionResult:
         is_cs_relevant=_normalize_required_bool(raw_result.get("is_cs_relevant"), default=True),
         mission=_clean_string(raw_result.get("mission")),
         usp=_clean_string(raw_result.get("usp")),
+        icp=_normalize_string_list(raw_result.get("icp")),
         use_cases=_normalize_string_list(raw_result.get("use_cases")),
-        pricing=_normalize_pricing(raw_result.get("pricing")),
+        pricing=_normalize_string_list(raw_result.get("pricing")),
         free_trial=_normalize_optional_bool(raw_result.get("free_trial")),
         soc2=_normalize_optional_bool(raw_result.get("soc2")),
         founded=_clean_string(raw_result.get("founded")),
+        case_studies=_normalize_string_list(raw_result.get("case_studies")),
+        customers=_normalize_string_list(raw_result.get("customers")),
+        value_statements=_normalize_string_list(raw_result.get("value_statements")),
         confidence=confidence,
     )
 
@@ -354,12 +389,6 @@ def _normalize_string_list(value: object) -> list[str]:
         return normalized
 
     return []
-
-
-def _normalize_pricing(value: object) -> str:
-    if isinstance(value, list):
-        return " | ".join(_normalize_string_list(value))
-    return _clean_string(value)
 
 
 def _normalize_optional_bool(value: object) -> bool | None:

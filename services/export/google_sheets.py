@@ -17,6 +17,47 @@ from services.extraction.vendor_intel import VendorIntelligence
 
 logger = logging.getLogger(__name__)
 GOOGLE_SHEETS_COLUMNS = list(DEFAULT_GOOGLE_SHEETS_COLUMNS)
+RUN_REVIEW_COLUMNS = [
+    "run_id",
+    "started_at",
+    "completed_at",
+    "queries_executed",
+    "candidate_count",
+    "queued_count",
+    "enriched_count",
+    "dropped_count",
+    "run_status",
+    "error_summary",
+]
+CANDIDATE_REVIEW_COLUMNS = [
+    "run_id",
+    "candidate_domain",
+    "candidate_title",
+    "source_query",
+    "source_rank",
+    "candidate_status",
+    "drop_reason",
+    "discovered_at",
+]
+VENDOR_REVIEW_COLUMNS = [
+    "run_id",
+    "vendor_name",
+    "website",
+    "source",
+    "lifecycle_stages",
+    "directory_category",
+    "directory_fit",
+    "include_in_directory",
+    "confidence",
+    "pricing_summary",
+    "soc2",
+    "free_trial",
+    "founded",
+    "mission_summary",
+    "use_case_summary",
+    "evidence_url_count",
+    "last_updated",
+]
 
 
 def vendor_intelligence_to_sheet_row(
@@ -67,6 +108,16 @@ def write_rows_to_csv(rows: list[dict[str, str]], output_path: Path) -> None:
 
 def append_rows_to_google_sheet(rows: list[dict[str, str]]) -> None:
     """Append Google Sheets-ready rows to the vendors sheet when configured."""
+    append_rows_to_google_sheet_tab(rows)
+
+
+def append_rows_to_google_sheet_tab(
+    rows: list[dict[str, object]],
+    *,
+    worksheet_name: str | None = None,
+    columns: list[str] | tuple[str, ...] | None = None,
+) -> None:
+    """Append rows to a specific Google Sheets tab using deterministic column order."""
     if not rows:
         return
 
@@ -81,22 +132,126 @@ def append_rows_to_google_sheet(rows: list[dict[str, str]]) -> None:
         return
 
     service = _build_google_sheets_service(credentials_info)
-    worksheet_name = _get_google_worksheet_name()
-    _ensure_google_sheet_headers(service, sheet_id, worksheet_name)
-    values = [_row_to_ordered_values(row) for row in rows]
-    columns = _google_sheets_columns()
+    target_columns = list(columns or _google_sheets_columns())
+    worksheet_name = worksheet_name or _get_google_worksheet_name()
+    _ensure_google_sheet_headers(service, sheet_id, worksheet_name, target_columns)
+    values = [_row_to_ordered_values(row, target_columns) for row in rows]
     (
         service.spreadsheets()
         .values()
         .append(
             spreadsheetId=sheet_id,
-            range=f"{worksheet_name}!A:{_sheet_column_letter(len(columns))}",
+            range=f"{worksheet_name}!A:{_sheet_column_letter(len(target_columns))}",
             valueInputOption="USER_ENTERED",
             body={"values": values},
         )
         .execute()
     )
     logger.info("Appended %s row(s) to Google Sheets worksheet %s", len(rows), worksheet_name)
+
+
+def publish_ops_review_export(
+    *,
+    run_record: dict[str, object],
+    candidate_records: list[dict[str, object]],
+    enrichment_results: list[dict[str, object]],
+) -> None:
+    """Publish review-friendly runs, candidates, and vendors tabs to Google Sheets."""
+    sheets_config = load_pipeline_config().google_sheets
+    if not sheets_config.ops_review_enabled:
+        return
+
+    append_rows_to_google_sheet_tab(
+        [run_record_to_review_row(run_record)],
+        worksheet_name=sheets_config.runs_worksheet_name,
+        columns=RUN_REVIEW_COLUMNS,
+    )
+    append_rows_to_google_sheet_tab(
+        candidate_records_to_review_rows(candidate_records, run_record=run_record),
+        worksheet_name=sheets_config.candidates_worksheet_name,
+        columns=CANDIDATE_REVIEW_COLUMNS,
+    )
+    append_rows_to_google_sheet_tab(
+        enrichment_results_to_review_rows(enrichment_results, run_record=run_record),
+        worksheet_name=sheets_config.vendors_worksheet_name,
+        columns=VENDOR_REVIEW_COLUMNS,
+    )
+
+
+def run_record_to_review_row(run_record: dict[str, object]) -> dict[str, object]:
+    """Return one compact operator-facing review row for a pipeline run."""
+    return {
+        "run_id": run_record.get("run_id", ""),
+        "started_at": run_record.get("started_at", ""),
+        "completed_at": run_record.get("completed_at", ""),
+        "queries_executed": run_record.get("queries_executed") or run_record.get("query", ""),
+        "candidate_count": run_record.get("candidate_count", ""),
+        "queued_count": run_record.get("queued_count", ""),
+        "enriched_count": run_record.get("enriched_count", ""),
+        "dropped_count": run_record.get("dropped_count", ""),
+        "run_status": run_record.get("run_status", ""),
+        "error_summary": run_record.get("error_summary", ""),
+    }
+
+
+def candidate_records_to_review_rows(
+    candidate_records: list[dict[str, object]],
+    *,
+    run_record: dict[str, object],
+) -> list[dict[str, object]]:
+    """Return review-friendly candidate rows for one pipeline run."""
+    run_id = str(run_record.get("run_id", "")).strip()
+    rows: list[dict[str, object]] = []
+    for candidate_record in candidate_records:
+        rows.append(
+            {
+                "run_id": run_id,
+                "candidate_domain": candidate_record.get("candidate_domain", ""),
+                "candidate_title": candidate_record.get("candidate_title", ""),
+                "source_query": candidate_record.get("source_query", ""),
+                "source_rank": candidate_record.get("source_rank", ""),
+                "candidate_status": candidate_record.get("candidate_status", ""),
+                "drop_reason": candidate_record.get("drop_reason", ""),
+                "discovered_at": candidate_record.get("discovered_at", ""),
+            }
+        )
+    return rows
+
+
+def enrichment_results_to_review_rows(
+    enrichment_results: list[dict[str, object]],
+    *,
+    run_record: dict[str, object],
+) -> list[dict[str, object]]:
+    """Return review-friendly vendor rows for one pipeline run."""
+    run_id = str(run_record.get("run_id", "")).strip()
+    rows: list[dict[str, object]] = []
+    for enrichment_result in enrichment_results:
+        profile = enrichment_result.get("profile")
+        if not isinstance(profile, VendorIntelligence):
+            continue
+        rows.append(
+            {
+                "run_id": run_id,
+                "vendor_name": profile.vendor_name,
+                "website": profile.website,
+                "source": profile.source,
+                "lifecycle_stages": ", ".join(profile.lifecycle_stages),
+                "directory_category": profile.directory_category,
+                "directory_fit": profile.directory_fit,
+                "include_in_directory": _stringify_boolean(profile.include_in_directory),
+                "confidence": profile.confidence,
+                "pricing_summary": ", ".join(profile.pricing[:3]),
+                "soc2": _stringify_boolean(profile.soc2),
+                "free_trial": _stringify_boolean(profile.free_trial),
+                "founded": profile.founded,
+                "mission_summary": _summary_text(profile.mission),
+                "use_case_summary": ", ".join(profile.use_cases[:3]),
+                "evidence_url_count": len(profile.evidence_urls),
+                "last_updated": enrichment_result.get("completed_at", ""),
+            }
+        )
+    return rows
 
 
 def _load_google_sheets_credentials_info() -> dict[str, Any] | None:
@@ -138,9 +293,8 @@ def _get_google_worksheet_name() -> str:
     return worksheet_name.strip() or load_pipeline_config().google_sheets.worksheet_name
 
 
-def _ensure_google_sheet_headers(service, sheet_id: str, worksheet_name: str) -> None:
+def _ensure_google_sheet_headers(service, sheet_id: str, worksheet_name: str, columns: list[str]) -> None:
     """Ensure the target worksheet starts with the expected header row."""
-    columns = _google_sheets_columns()
     header_range = f"{worksheet_name}!A1:{_sheet_column_letter(len(columns))}1"
     response = (
         service.spreadsheets()
@@ -209,9 +363,9 @@ def _get_google_worksheet_id(service, sheet_id: str, worksheet_name: str) -> int
     raise ValueError(f"Worksheet {worksheet_name!r} was not found in the configured Google Sheet")
 
 
-def _row_to_ordered_values(row: dict[str, str]) -> list[str]:
+def _row_to_ordered_values(row: dict[str, object], columns: list[str]) -> list[str]:
     """Convert a row dictionary into deterministic Google Sheets column order."""
-    return [_stringify_cell(row.get(column, "")) for column in _google_sheets_columns()]
+    return [_stringify_cell(row.get(column, "")) for column in columns]
 
 
 def _stringify_boolean(value: bool | None) -> str:
@@ -248,3 +402,11 @@ def _row_has_any_value(row: list[object]) -> bool:
 def _google_sheets_columns() -> list[str]:
     """Return the configured Google Sheets column order."""
     return list(load_pipeline_config().google_sheets.columns)
+
+
+def _summary_text(text: str, *, max_chars: int = 120) -> str:
+    """Return one readable summary string for operator review."""
+    cleaned = " ".join(text.split()).strip()
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[: max_chars - 3].rstrip() + "..."

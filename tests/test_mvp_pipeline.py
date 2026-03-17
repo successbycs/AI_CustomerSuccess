@@ -27,6 +27,9 @@ def test_run_mvp_pipeline_runs_discovery_and_enrichment_phases(monkeypatch, capl
         "log_runtime_configuration",
         lambda: calls.append(("log", None)),
     )
+    monkeypatch.setattr(pipeline_module.orchestrator, "_persist_run_record", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_run_snapshot", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_candidate_review_snapshot", lambda candidate_records: None)
     monkeypatch.setattr(
         pipeline_module.orchestrator.discovery_runner,
         "run_discovery_phase",
@@ -43,8 +46,18 @@ def test_run_mvp_pipeline_runs_discovery_and_enrichment_phases(monkeypatch, capl
     )
     monkeypatch.setattr(
         pipeline_module.orchestrator.google_sheets,
-        "append_rows_to_google_sheet",
-        lambda rows: calls.append(("append", len(rows))),
+        "publish_ops_review_export",
+        lambda **kwargs: calls.append(("review_export", kwargs["run_record"]["run_status"])),
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_directory_dataset",
+        lambda enrichment_results: calls.append(("directory_export", len(enrichment_results))) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_vendor_review_dataset",
+        lambda enrichment_results: calls.append(("review_dataset_export", len(enrichment_results))) or [],
     )
 
     result = run_mvp_pipeline("ai customer success platform")
@@ -55,7 +68,9 @@ def test_run_mvp_pipeline_runs_discovery_and_enrichment_phases(monkeypatch, capl
         ("log", None),
         ("discovery", "ai customer success platform"),
         ("enrichment", 2),
-        ("append", 2),
+        ("review_export", "completed"),
+        ("directory_export", 0),
+        ("review_dataset_export", 0),
     ]
     assert "Phase 1 discovery produced 2 candidate domains and queued 2 vendors for enrichment" in caplog.text
     assert "LLM stage summary: successes=1 fallback_or_skipped=1" in caplog.text
@@ -77,6 +92,9 @@ def test_run_mvp_pipeline_retries_discovery_when_persistence_is_unavailable(monk
     monkeypatch.setattr(pipeline_module.supabase_client, "is_configured", lambda: True)
     monkeypatch.setattr(pipeline_module.supabase_client, "vendor_exists", lambda _website: False)
     monkeypatch.setattr(pipeline_module.supabase_client, "upsert_vendor_result", lambda *_args: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_persist_run_record", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_run_snapshot", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_candidate_review_snapshot", lambda candidate_records: None)
     monkeypatch.setattr(
         pipeline_module.orchestrator.supabase_client,
         "is_persistence_unavailable_error",
@@ -96,14 +114,30 @@ def test_run_mvp_pipeline_retries_discovery_when_persistence_is_unavailable(monk
     )
     monkeypatch.setattr(
         pipeline_module.orchestrator.google_sheets,
-        "append_rows_to_google_sheet",
-        lambda rows: calls.append(("append", len(rows))),
+        "publish_ops_review_export",
+        lambda **kwargs: calls.append(("review_export", kwargs["run_record"]["run_status"])),
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_directory_dataset",
+        lambda enrichment_results: calls.append(("directory_export", len(enrichment_results))) or [],
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_vendor_review_dataset",
+        lambda enrichment_results: calls.append(("review_dataset_export", len(enrichment_results))) or [],
     )
 
     result = run_mvp_pipeline("query")
 
     assert result == []
-    assert calls == [("discovery", True), ("discovery", False), ("append", 0)]
+    assert calls == [
+        ("discovery", True),
+        ("discovery", False),
+        ("review_export", "completed"),
+        ("directory_export", 0),
+        ("review_dataset_export", 0),
+    ]
     assert "Persistence unavailable, continuing without deduplication" in caplog.text
 
 
@@ -124,6 +158,9 @@ def test_run_mvp_pipeline_updates_candidate_statuses_from_enrichment_results(mon
     monkeypatch.setattr(pipeline_module.supabase_client, "is_configured", lambda: False)
     monkeypatch.setattr(pipeline_module.llm_extractor, "start_pipeline_run", lambda: None)
     monkeypatch.setattr(pipeline_module.llm_extractor, "log_runtime_configuration", lambda: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_persist_run_record", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_run_snapshot", lambda run_record: None)
+    monkeypatch.setattr(pipeline_module.orchestrator, "_write_candidate_review_snapshot", lambda candidate_records: None)
     monkeypatch.setattr(
         pipeline_module.orchestrator.discovery_runner,
         "run_discovery_phase",
@@ -141,8 +178,18 @@ def test_run_mvp_pipeline_updates_candidate_statuses_from_enrichment_results(mon
     )
     monkeypatch.setattr(
         pipeline_module.orchestrator.google_sheets,
-        "append_rows_to_google_sheet",
-        lambda _rows: None,
+        "publish_ops_review_export",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_directory_dataset",
+        lambda enrichment_results: [],
+    )
+    monkeypatch.setattr(
+        pipeline_module.orchestrator,
+        "_export_vendor_review_dataset",
+        lambda enrichment_results: [],
     )
 
     result = run_mvp_pipeline("query")
