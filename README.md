@@ -25,6 +25,8 @@ Additional TOML files currently exist under `config/` as transitional or referen
 
 The current default discovery depth is `max_pages_per_query = 5`.
 
+LLM extraction is expected to run on normal pipeline executions when valid OpenAI configuration is present. If the LLM layer is unavailable, the pipeline falls back to deterministic extraction and that fallback should be visible in operator-facing run outputs.
+
 ## Run Tests
 
 Use the local virtual environment for deterministic test runs:
@@ -54,11 +56,21 @@ Run one scheduled job manually:
 .venv/bin/python -m services.pipeline.scheduler --run-now digest
 ```
 
-Optional Supabase smoke test:
+Supabase schema and connectivity check:
 
 ```sh
 .venv/bin/python scripts/check_supabase.py
 ```
+
+This check verifies the core persistence tables and columns used by vendor upserts, vendor exports, discovery candidate storage, and pipeline run tracking. It will fail clearly when required Supabase schema elements are missing.
+
+The repo-owned schema fix lives at:
+
+```sh
+supabase/core_persistence_schema.sql
+```
+
+Apply that SQL in the Supabase SQL editor or through your normal Postgres migration path before expecting live persistence-backed exports to pass.
 
 Integration diagnostics:
 
@@ -85,21 +97,64 @@ The repo now includes an autonomous milestone-control doc set:
 - `docs/implementation_plan.md` tracks current progress and remaining milestones
 - `docs/autonomous_dev_loop.md` defines the controller -> planner -> builder -> reviewer -> QA milestone loop
 - `docs/autonomous_kickoff_prompt.md` provides the reusable kickoff prompt for each milestone cycle
-- `docs/agents/` contains reusable prompts for the controller, planner, builder, reviewer, and QA roles
+- `docs/agents/` contains reusable prompts for the controller, planner, builder, reviewer, QA, closeout-auditor, and backfill-auditor roles
 - `docs/codex_guardrails.md` defines implementation constraints for autonomous work
+- `docs/audit/audit.md` is the persistent audit log for milestone closeout and backfill reviews
 - `project_state.json`, `milestone_registry.json`, and `runs/run_history.json` provide local cycle state
-- `scripts/autonomous_controller.py`, `scripts/run_autonomous_cycle.sh`, `scripts/local_agent_runner.py`, and `scripts/verify_project.sh` provide local execution and verification entrypoints
+- `scripts/autonomous_controller.py`, `scripts/run_autonomous_cycle.sh`, `scripts/local_agent_runner.py`, `scripts/milestone_auditor.py`, and `scripts/verify_project.sh` provide local execution, verification, and audit entrypoints
 
 Common local controller commands:
 
 ```sh
 .venv/bin/python scripts/autonomous_controller.py status
 .venv/bin/python scripts/autonomous_controller.py next
+.venv/bin/python scripts/autonomous_controller.py next-action
 .venv/bin/python scripts/autonomous_controller.py verify
+.venv/bin/python scripts/autonomous_controller.py assert-artifacts
+.venv/bin/python scripts/autonomous_controller.py audit-closeout M08
+.venv/bin/python scripts/autonomous_controller.py audit-backfill --all-unaudited
 .venv/bin/python scripts/autonomous_controller.py review M08 --status pass --note "review complete"
 .venv/bin/python scripts/autonomous_controller.py qa M08 --status pass --note "qa complete" --manual-checks-complete --artifact outputs/directory_dataset.json
 .venv/bin/python scripts/autonomous_controller.py complete M08
 bash scripts/run_autonomous_cycle.sh
+```
+
+Repo-native runner options:
+
+- `scripts/local_agent_runner.py` always generates structured role packets under `runs/agent_outputs/`
+- set `AUTONOMOUS_AGENT_CLI` to a local executable that reads one JSON payload from stdin and returns one JSON result on stdout if you want the runner to capture real local AI output
+- `scripts/openai_agent_cli.py` is the repo-native OpenAI backend adapter for `AUTONOMOUS_AGENT_CLI`
+- `M13B` is the milestone that tracks completion of the real local AI backend hookup and proof through the controller loop
+
+Example OpenAI backend setup:
+
+```sh
+export OPENAI_API_KEY=your_api_key
+export AUTONOMOUS_AGENT_CLI=".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+```
+
+Operator-facing control-plane summary:
+
+- `scripts/autonomous_controller.py` is the controller. It selects the active milestone, records verification/review/QA state, and decides whether completion is allowed.
+- after `complete`, the controller now triggers the `Closeout Auditor` automatically and appends its entry to `docs/audit/audit.md` when an OpenAI audit backend is available
+- the `Backfill Auditor` is a manual controller command for completed milestones that do not yet have an audit entry
+- `scripts/autonomous_controller.py next-action` tells you whether the milestone should retry, move to review/QA, stop on an external blocker, or complete.
+- the controller now reports datastore capability state in `status` and hard-blocks schema-admin milestones like `M15` when no DB-admin path is configured
+- `planner`, `builder`, `reviewer`, and `qa` are separate role phases. Their prompt files live under `docs/agents/`.
+- `scripts/local_agent_runner.py` creates one role packet per phase and sends that packet to the configured backend when `AUTONOMOUS_AGENT_CLI` is set.
+- A role packet is the saved JSON handoff for one phase. It contains the milestone context, changed files, artifact checks, recent history evidence, and the role result.
+- Role packets now also include a delegated task contract with `task_id`, execution mode, bounded write scope, and allowed tool ids.
+- Role packets now also include the controller’s retry state so planner/builder can see whether the current iteration is a fresh pass, a retry, or an externally blocked stop condition.
+- Role packets are written to `runs/agent_outputs/` and run-history events are written to `runs/run_history.json`.
+- Attribution is explicit in both places. Packets and history entries now include `producer_role`, `phase`, `backend`, `model`, and `cycle_id`.
+- Delegated execution is serial by default through `project_state.json` delegation policy; parallel work should remain opt-in and read-only unless write-scope isolation is explicit.
+- `scripts/run_autonomous_cycle.sh` creates one `cycle_id` for the whole run so related planner/builder/reviewer/qa packets can be grouped together.
+- `scripts/milestone_auditor.py` is the repo-native audit runner used for post-completion closeout audits and historical backfill audits.
+
+Container proof command:
+
+```sh
+bash scripts/prove_container_autonomous_loop.sh
 ```
 
 Before using the autonomous loop, read:
@@ -113,3 +168,16 @@ README.md
 config/pipeline_config.json
 config/scheduler.toml
 ```
+
+## Tool Registry
+
+The repo now defines a reusable tool pattern under `tools/`.
+
+- `tools/tool_registry.json` is the registry of declared project tools
+- `tools/supabase/tool_spec.json` is the first concrete tool spec
+- roles may use declared tools only when the controller exposes them for the current milestone and role
+- tool specs define allowed operations, write access, and approval requirements
+- direct repo-owned access is preferred
+- direct repo-owned Supabase access is the active development path for schema admin and CRUD work
+- `supabase/core_persistence_schema.sql` remains the schema source of truth even when a tool backend is used
+- The Supabase tool must support both schema-admin operations and data CRUD for vendors, candidates, and pipeline runs

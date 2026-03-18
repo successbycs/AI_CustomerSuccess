@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-03-17T11:21:58.118623+00:00",
+  "role": "reviewer",
+  "prompt_path": "/home/chris/projects/AI_CustomerSuccess/docs/agents/reviewer_agent.md",
+  "milestone": {
+    "id": "M13B",
+    "title": "Autonomous execution backend integration",
+    "status": "in_progress",
+    "dependencies": [
+      "M13"
+    ],
+    "verify": [
+      ".venv/bin/python scripts/autonomous_audit.py",
+      ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+      ".venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B",
+      ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B",
+      "bash scripts/run_autonomous_cycle.sh",
+      "Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py"
+    ],
+    "section_text": "## M13B Autonomous execution backend integration\nStatus: `in_progress`\n\nObjective:\nFinish the remaining autonomous setup work so the repo-native control plane can drive a real local AI-backed milestone cycle instead of packet generation alone.\n\nAcceptance criteria:\n- `scripts/local_agent_runner.py` can call a configured local AI CLI and normalize its JSON response\n- `scripts/openai_agent_cli.py` exists as the repo-native OpenAI backend adapter for `AUTONOMOUS_AGENT_CLI`\n- `scripts/autonomous_controller.py` uses structured reviewer and QA outputs as milestone-close evidence\n- Autonomous setup artifacts are asserted through the controller for this milestone\n- One supervised autonomous cycle runs through the repo-native wrapper and records structured role outputs for the active milestone\n- The operator docs describe how to configure `AUTONOMOUS_AGENT_CLI` and what proof is still required before this milestone can close\n\nVerification:\n- `.venv/bin/python scripts/autonomous_audit.py`\n- `.venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py`\n- `.venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B`\n- `.venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B`\n- `bash scripts/run_autonomous_cycle.sh`\n- Configure and run one real `AUTONOMOUS_AGENT_CLI` backend through `scripts/local_agent_runner.py`"
+  },
+  "current_focus": "M13B",
+  "context_files": [
+    "docs/product_design.md",
+    "docs/architecture.md",
+    "docs/codex_guardrails.md",
+    "docs/implementation_plan.md",
+    "the files changed for the milestone"
+  ],
+  "changed_files": [],
+  "artifact_checks": [],
+  "checklist": [
+    "Inspect changed files only",
+    "Check architecture and guardrail alignment",
+    "Call out missing tests and silent failure paths",
+    "State whether the milestone is actually closeable"
+  ],
+  "runner_mode": "external_local_ai_cli",
+  "notes": "This runner generates structured local packets and can optionally invoke a local AI CLI.",
+  "result": {
+    "status": "blocked",
+    "summary": "No changed files or artifact results were provided, so the milestone cannot be reviewed or considered closeable.",
+    "issues": [
+      "changed_files is empty; nothing to inspect",
+      "artifact_checks is empty; no verification evidence provided",
+      "Cannot assess acceptance criteria or architecture/guardrail alignment without implementation diff",
+      "Milestone closeability cannot be established from this packet"
+    ],
+    "manual_checks_required": true,
+    "manual_checks_complete": false
+  },
+  "cli_command": ".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+}

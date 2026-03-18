@@ -48,14 +48,23 @@ class FakeSupabaseClient:
 
 
 def test_vendor_exists_returns_true_when_website_is_found():
-    fake_client = FakeSupabaseClient([{"website": "https://example.com"}])
+    fake_client = FakeSupabaseClient(
+        [
+            {
+                "website": "https://example.com",
+                "directory_fit": "high",
+                "directory_category": "customer-success",
+                "include_in_directory": True,
+            }
+        ]
+    )
 
     result = supabase_client.vendor_exists("https://example.com", client=fake_client)
 
     assert result is True
     assert fake_client.table_calls == ["cs_vendors"]
     assert fake_client.last_query.operations == [
-        ("select", "website"),
+        ("select", "website,directory_fit,directory_category,include_in_directory"),
         ("eq", "website", "https://example.com"),
         ("limit", 1),
         ("execute",),
@@ -66,6 +75,51 @@ def test_vendor_exists_returns_false_when_website_is_missing():
     fake_client = FakeSupabaseClient([])
 
     result = supabase_client.vendor_exists("https://example.com", client=fake_client)
+
+    assert result is False
+
+
+def test_vendor_exists_returns_false_when_vendor_row_lacks_review_signal():
+    fake_client = FakeSupabaseClient(
+        [
+            {
+                "website": "https://example.com",
+                "directory_fit": None,
+                "directory_category": None,
+                "include_in_directory": None,
+            }
+        ]
+    )
+
+    result = supabase_client.vendor_exists("https://example.com", client=fake_client)
+
+    assert result is False
+
+
+def test_supports_export_ready_vendor_profiles_returns_true_when_required_columns_are_available(monkeypatch):
+    fake_client = FakeSupabaseClient([])
+
+    monkeypatch.setattr(
+        supabase_client,
+        "_available_vendor_profile_columns",
+        lambda _client: tuple(supabase_client.EXPORT_READY_VENDOR_COLUMNS) + ("name", "website"),
+    )
+
+    result = supabase_client.supports_export_ready_vendor_profiles(client=fake_client)
+
+    assert result is True
+
+
+def test_supports_export_ready_vendor_profiles_returns_false_when_required_columns_are_missing(monkeypatch):
+    fake_client = FakeSupabaseClient([])
+
+    monkeypatch.setattr(
+        supabase_client,
+        "_available_vendor_profile_columns",
+        lambda _client: ("name", "website", "mission"),
+    )
+
+    result = supabase_client.supports_export_ready_vendor_profiles(client=fake_client)
 
     assert result is False
 

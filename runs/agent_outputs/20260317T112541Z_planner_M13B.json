@@ -1,0 +1,217 @@
+{
+  "timestamp": "2026-03-17T11:25:37.694900+00:00",
+  "role": "planner",
+  "prompt_path": "/home/chris/projects/AI_CustomerSuccess/docs/agents/planner_agent.md",
+  "milestone": {
+    "id": "M13B",
+    "title": "Autonomous execution backend integration",
+    "status": "in_progress",
+    "dependencies": [
+      "M13"
+    ],
+    "verify": [
+      ".venv/bin/python scripts/autonomous_audit.py",
+      ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+      ".venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B",
+      ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B",
+      "bash scripts/run_autonomous_cycle.sh",
+      "Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py"
+    ],
+    "section_text": "## M13B Autonomous execution backend integration\nStatus: `in_progress`\n\nObjective:\nFinish the remaining autonomous setup work so the repo-native control plane can drive a real local AI-backed milestone cycle instead of packet generation alone.\n\nAcceptance criteria:\n- `scripts/local_agent_runner.py` can call a configured local AI CLI and normalize its JSON response\n- `scripts/openai_agent_cli.py` exists as the repo-native OpenAI backend adapter for `AUTONOMOUS_AGENT_CLI`\n- `scripts/autonomous_controller.py` uses structured reviewer and QA outputs as milestone-close evidence\n- Autonomous setup artifacts are asserted through the controller for this milestone\n- One supervised autonomous cycle runs through the repo-native wrapper and records structured role outputs for the active milestone\n- The operator docs describe how to configure `AUTONOMOUS_AGENT_CLI` and what proof is still required before this milestone can close\n\nVerification:\n- `.venv/bin/python scripts/autonomous_audit.py`\n- `.venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py`\n- `.venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B`\n- `.venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B`\n- `bash scripts/run_autonomous_cycle.sh`\n- Configure and run one real `AUTONOMOUS_AGENT_CLI` backend through `scripts/local_agent_runner.py`"
+  },
+  "current_focus": "M13B",
+  "context_files": [
+    "docs/product_design.md",
+    "docs/architecture.md",
+    "docs/codex_guardrails.md",
+    "docs/implementation_plan.md",
+    "README.md",
+    "config/pipeline_config.json",
+    "config/scheduler.toml"
+  ],
+  "changed_files": [
+    ".devcontainer/devcontainer.json",
+    "README.md",
+    "docs/autonomous_dev_loop.md",
+    "docs/implementation_plan.md",
+    "docs/project_brain.md",
+    "milestone_registry.json",
+    "project_state.json",
+    "scripts/autonomous_audit.py",
+    "scripts/autonomous_controller.py",
+    "scripts/local_agent_runner.py",
+    "scripts/openai_agent_cli.py",
+    "scripts/prove_container_autonomous_loop.sh",
+    "scripts/run_autonomous_cycle.sh",
+    "scripts/verify_project.sh",
+    "tests/test_autonomous_audit.py",
+    "tests/test_autonomous_controller.py",
+    "tests/test_local_agent_runner.py",
+    "tests/test_openai_agent_cli.py"
+  ],
+  "artifact_checks": [
+    {
+      "path": "scripts/local_agent_runner.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/openai_agent_cli.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/run_autonomous_cycle.sh",
+      "exists": true
+    },
+    {
+      "path": "scripts/prove_container_autonomous_loop.sh",
+      "exists": true
+    },
+    {
+      "path": "project_state.json",
+      "exists": true
+    },
+    {
+      "path": "milestone_registry.json",
+      "exists": true
+    }
+  ],
+  "history_evidence": {
+    "verify": {
+      "timestamp": "2026-03-17T11:19:21.897043+00:00",
+      "action": "verify",
+      "milestone": "M13B",
+      "command": "bash scripts/verify_project.sh; .venv/bin/python scripts/autonomous_audit.py; .venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py; .venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B; .venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B; bash scripts/run_autonomous_cycle.sh; Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py",
+      "exit_code": 0,
+      "success": true,
+      "note": "verification commands passed, manual verification still required",
+      "commands": [
+        {
+          "command": "bash scripts/verify_project.sh",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "Running repo readiness audit\nAutonomous development audit: READY\nRepo root: /home/chris/projects/AI_CustomerSuccess\nSummary: 23 present, 0 missing required, 0 missing optional, 0 malformed JSON\nRunning controller smoke checks\nRunning test suite\n============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0\nrootdir: /home/chris/projects/AI_CustomerSuccess\nplugins: anyio-4.12.1\ncollected 146 items\n\ntests/test_admin_actions.py ...                                          [  2%]\ntests/test_admin_api.py ........                                         [  7%]\ntests/test_admin_update_vendor.py ..                                     [  8%]\ntests/test_apify_sources.py ..........                                   [ 15%]\ntests/test_autonomous_audit.py ....                                      [ 18%]\ntests/test_autonomous_controller.py ...............                      [ 28%]\ntests/test_config_loader.py ..                                           [ 30%]\ntests/test_directory_dataset.py ...                                      [ 32%]\ntests/test_directory_relevance.py ..                                     [ 33%]\ntests/test_discovery_config.py .....                                     [ 36%]\ntests/test_discovery_runner.py ..                                        [ 38%]\ntests/test_discovery_store.py ..                                         [ 39%]\ntests/test_enrichment_config.py .                                        [ 40%]\ntests/test_enrichment_runner.py ....                                     [ 43%]\ntests/test_export_config.py .                                            [ 43%]\ntests/test_google_sheets.py .........                                    [ 50%]\ntests/test_llm_config.py .                                               [ 50%]\ntests/test_llm_extractor.py ...........                                  [ 58%]\ntests/test_local_agent_runner.py ..                                      [ 59%]\ntests/test_merge_results.py ...                                          [ 61%]\ntests/test_mvp_pipeline.py ...                                           [ 63%]\ntests/test_openai_agent_cli.py ...                                       [ 65%]\ntests/test_page_text_extractor.py ....                                   [ 68%]\ntests/test_persistence.py ......                                         [ 72%]\ntests/test_run_store.py ..                                               [ 73%]\ntests/test_scheduler.py ...                                              [ 76%]\ntests/test_scheduler_config.py .                                         [ 76%]\ntests/test_site_explorer.py ...                                          [ 78%]\ntests/test_supabase_client.py ...                                        [ 80%]\ntests/test_vendor_fetcher.py ......                                      [ 84%]\ntests/test_vendor_intel_extraction.py ...........                        [ 92%]\ntests/test_vendor_intel_schema.py .                                      [ 93%]\ntests/test_vendor_profile_builder.py ...                                 [ 95%]\ntests/test_vendor_review_dataset.py ...                                  [ 97%]\ntests/test_web_search.py ....                                            [100%]\n\n============================= 146 passed in 0.26s ==============================\n",
+          "stderr": ""
+        },
+        {
+          "command": ".venv/bin/python scripts/autonomous_audit.py",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "Autonomous development audit: READY\nRepo root: /home/chris/projects/AI_CustomerSuccess\nSummary: 23 present, 0 missing required, 0 missing optional, 0 malformed JSON\n",
+          "stderr": ""
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0\nrootdir: /home/chris/projects/AI_CustomerSuccess\nplugins: anyio-4.12.1\ncollected 17 items\n\ntests/test_autonomous_controller.py ...............                      [ 88%]\ntests/test_local_agent_runner.py ..                                      [100%]\n\n============================== 17 passed in 0.05s ==============================\n",
+          "stderr": ""
+        },
+        {
+          "command": ".venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "Generated planner packet for M13B: /home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_planner_M13B.json\n",
+          "stderr": ""
+        },
+        {
+          "command": ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "Artifact assertions for M13B:\n- scripts/local_agent_runner.py [ok]\n- scripts/openai_agent_cli.py [ok]\n- scripts/run_autonomous_cycle.sh [ok]\n- scripts/prove_container_autonomous_loop.sh [ok]\n- project_state.json [ok]\n- milestone_registry.json [ok]\n",
+          "stderr": ""
+        },
+        {
+          "command": "bash scripts/run_autonomous_cycle.sh",
+          "exit_code": 0,
+          "success": true,
+          "stdout": "== Autonomous audit ==\nAutonomous development audit: READY\nRepo root: /home/chris/projects/AI_CustomerSuccess\nSummary: 23 present, 0 missing required, 0 missing optional, 0 malformed JSON\n\n== Controller status ==\nCurrent focus: M13B\nMilestones:\n- M01: Discovery foundation [complete]\n- M02: Two-phase candidate -> enrichment pipeline [complete]\n- M03: Bounded website exploration [complete]\n- M04: Deterministic extraction baseline [complete]\n- M05: Optional LLM enrichment and safe merge [complete]\n- M06: Directory relevance scoring [complete]\n- M07: Review and public export artifacts [complete]\n- M08: Public directory experience [not_started]\n- M09: Admin visibility and operator actions [not_started]\n- M10: Run tracking and scheduled operation hardening [not_started]\n- M11: Documentation and config source-of-truth alignment [complete]\n- M12: Autonomous development control plane [complete]\n- M12A: Autonomous controller pipeline bootstrap [complete]\n- M13: Milestone-close verification script [complete]\n- M13B: Autonomous execution backend integration [in_progress]\n- M14: Container and devcontainer parity [not_started]\n- M15: Supabase schema and persistence hardening [not_started]\n- M16: End-to-end runtime hardening [not_started]\n- M17: Internal launch readiness [not_started]\nLatest role outputs:\n- planner: packet_only (/home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_planner_M13B.json)\n- builder: packet_only (/home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T110914Z_builder_M13B.json)\n- reviewer: packet_only (/home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T110914Z_reviewer_M13B.json)\n- qa: packet_only (/home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T110914Z_qa_M13B.json)\nLatest run:\n- 2026-03-17T11:19:21.535003+00:00 | agent_output | exit=0 | success=True\n\n== Next milestone ==\nNext milestone: M13B - Autonomous execution backend integration\nStatus: in_progress\nDependencies: M13\nVerify:\n- .venv/bin/python scripts/autonomous_audit.py\n- .venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py\n- .venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B\n- .venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B\n- bash scripts/run_autonomous_cycle.sh\n- Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py\n\n== Prompt sequence ==\nNext milestone: M13B - Autonomous execution backend integration\nController:\n- /home/chris/projects/AI_CustomerSuccess/docs/agents/controller_agent.md [present]\nPrompt sequence:\n- Planner: /home/chris/projects/AI_CustomerSuccess/docs/agents/planner_agent.md [present]\n- Builder: /home/chris/projects/AI_CustomerSuccess/docs/agents/builder_agent.md [present]\n- Reviewer: /home/chris/projects/AI_CustomerSuccess/docs/agents/reviewer_agent.md [present]\n- QA: /home/chris/projects/AI_CustomerSuccess/docs/agents/qa_agent.md [present]\nVerification reminder:\n- .venv/bin/python scripts/autonomous_audit.py\n- .venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py\n- .venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B\n- .venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B\n- bash scripts/run_autonomous_cycle.sh\n- Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py\nStatus transition reminder:\n- record review: python scripts/autonomous_controller.py review M13B --status pass|fail --note ...\n- record qa: python scripts/autonomous_controller.py qa M13B --status pass|fail --note ... [--manual-checks-complete] [--artifact path]\n- artifact assertions: python scripts/autonomous_controller.py assert-artifacts M13B\n- complete only after verify + review + qa: python scripts/autonomous_controller.py complete M13B\n\nNo AUTONOMOUS_AGENT_RUNNER configured.\nGenerating repo-native local role packets instead.\nGenerated planner packet for M13B: /home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_planner_M13B.json\nGenerated builder packet for M13B: /home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_builder_M13B.json\nGenerated reviewer packet for M13B: /home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_reviewer_M13B.json\nGenerated qa packet for M13B: /home/chris/projects/AI_CustomerSuccess/runs/agent_outputs/20260317T111921Z_qa_M13B.json\n\nYou can still execute milestone verification and status transitions manually:\n  /home/chris/projects/AI_CustomerSuccess/.venv/bin/python scripts/autonomous_controller.py verify\n  /home/chris/projects/AI_CustomerSuccess/.venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B\n",
+          "stderr": ""
+        }
+      ],
+      "manual_checks_pending": [
+        "Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py"
+      ],
+      "artifact_assertions": [
+        {
+          "path": "scripts/local_agent_runner.py",
+          "kind": "text_nonempty",
+          "exists": true,
+          "success": true
+        },
+        {
+          "path": "scripts/openai_agent_cli.py",
+          "kind": "text_nonempty",
+          "exists": true,
+          "success": true
+        },
+        {
+          "path": "scripts/run_autonomous_cycle.sh",
+          "kind": "text_nonempty",
+          "exists": true,
+          "success": true
+        },
+        {
+          "path": "scripts/prove_container_autonomous_loop.sh",
+          "kind": "text_nonempty",
+          "exists": true,
+          "success": true
+        },
+        {
+          "path": "project_state.json",
+          "kind": "json_nonempty",
+          "exists": true,
+          "success": true
+        },
+        {
+          "path": "milestone_registry.json",
+          "kind": "json_nonempty",
+          "exists": true,
+          "success": true
+        }
+      ]
+    },
+    "review": {
+      "timestamp": "2026-03-17T11:09:32.661954+00:00",
+      "action": "review",
+      "milestone": "M13B",
+      "command": "review M13B",
+      "exit_code": 0,
+      "success": true,
+      "note": "control plane changes align with the milestone; real backend proof is the remaining gap",
+      "review_status": "pass"
+    },
+    "qa": {
+      "timestamp": "2026-03-17T11:09:32.732289+00:00",
+      "action": "qa",
+      "milestone": "M13B",
+      "command": "qa M13B",
+      "exit_code": 1,
+      "success": false,
+      "note": "scripted verification passed, but a real AUTONOMOUS_AGENT_CLI backend has not been configured and exercised yet",
+      "qa_status": "fail",
+      "manual_checks_complete": false,
+      "artifact_checks": []
+    }
+  },
+  "checklist": [
+    "Restate the objective for M13B",
+    "List acceptance criteria and proof requirements",
+    "Identify files likely to change",
+    "Identify tests to add or update",
+    "List manual/runtime checks required before closure"
+  ],
+  "runner_mode": "external_local_ai_cli",
+  "notes": "This runner generates structured local packets and can optionally invoke a local AI CLI.",
+  "result": {
+    "status": "in_progress",
+    "summary": "M13B implementation and scripted verification are in place, but milestone closure is blocked on proving one real AUTONOMOUS_AGENT_CLI backend run through scripts/local_agent_runner.py.",
+    "issues": [
+      "Manual proof still pending: configure and run a real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py",
+      "QA remains failed because manual backend execution has not been completed",
+      "run_autonomous_cycle.sh only demonstrated packet generation fallback with no AUTONOMOUS_AGENT_RUNNER configured"
+    ],
+    "manual_checks_required": true,
+    "manual_checks_complete": false
+  },
+  "cli_command": ".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+}

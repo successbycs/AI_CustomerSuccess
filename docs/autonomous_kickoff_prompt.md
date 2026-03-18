@@ -34,6 +34,12 @@ Execution rules:
 - Respect docs/codex_guardrails.md.
 - Do not mark a milestone complete unless acceptance criteria are implemented, tests pass, verification succeeds, and any required runtime/manual checks have been run.
 - If any acceptance criterion is not proven, leave the milestone as in_progress or not_started and say exactly what is still unverified.
+- If verification fails but the failure is actionable within the current milestone, keep iterating inside the same milestone instead of stopping at status reporting.
+- Only stop retrying when the issue is an external blocker, a required manual check, a destructive action, a product-scope decision, or the retry limit is reached.
+- If the current milestone is blocked by a missing reusable capability, create one minimal capability milestone, add it to both docs/implementation_plan.md and milestone_registry.json, complete it, then resume the blocked parent milestone.
+- For tool-access blockers, implement the missing capability through the repo tool pattern under tools/ instead of ad hoc access.
+- Use direct repo-owned access for declared tools instead of adding ad hoc execution paths.
+- When tools are declared in the repo registry, roles may use those tools only through the controller-governed access model.
 
 Run:
 - relevant tests

@@ -23,6 +23,7 @@ Check:
 - maintainability
 - whether tests actually prove the milestone acceptance criteria
 - whether missing automated coverage should block milestone completion
+- whether any declared tool use stayed within the repo tool registry and role access model
 
 Return:
 

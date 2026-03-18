@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from services.extraction import vendor_intel
 from services.extraction.llm_extractor import LLMExtractionResult
 from services.extraction.vendor_intel import VendorIntelligence
@@ -18,6 +20,7 @@ def merge_vendor_intelligence(
     merged_mission = _prefer_text_value(deterministic.mission, llm_result.mission)
     merged_usp = _prefer_text_value(deterministic.usp, llm_result.usp)
     merged_icp = _merge_unique_strings(deterministic.icp, llm_result.icp)
+    merged_icp_buyer = _merge_buyer_profiles(deterministic.icp_buyer, llm_result.icp_buyer)
     merged_use_cases = _merge_unique_strings(deterministic.use_cases, llm_result.use_cases)
     merged_pricing = _merge_unique_strings(deterministic.pricing, llm_result.pricing)
     merged_case_studies = _merge_unique_strings(deterministic.case_studies, llm_result.case_studies)
@@ -44,6 +47,7 @@ def merge_vendor_intelligence(
         mission=merged_mission,
         usp=merged_usp,
         icp=merged_icp,
+        icp_buyer=merged_icp_buyer,
         use_cases=merged_use_cases,
         lifecycle_stages=deterministic.lifecycle_stages,
         pricing=merged_pricing,
@@ -69,6 +73,35 @@ def _merge_unique_strings(*collections: list[str]) -> list[str]:
             if cleaned_value and cleaned_value not in merged:
                 merged.append(cleaned_value)
     return merged
+
+
+def _merge_buyer_profiles(*collections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for collection in collections:
+        for item in vendor_intel.normalize_icp_buyer_profiles(collection):
+            persona = str(item.get("persona") or "").strip()
+            if not persona:
+                continue
+            key = persona.lower()
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = item
+                continue
+
+            existing_confidence = _confidence_rank(str(existing.get("confidence") or ""))
+            candidate_confidence = _confidence_rank(str(item.get("confidence") or ""))
+            if candidate_confidence > existing_confidence:
+                existing["confidence"] = item.get("confidence", "")
+            existing["evidence"] = _merge_unique_strings(existing.get("evidence", []), item.get("evidence", []))
+            existing["google_queries"] = _merge_unique_strings(
+                existing.get("google_queries", []),
+                item.get("google_queries", []),
+            )[:5]
+            existing["geo_queries"] = _merge_unique_strings(
+                existing.get("geo_queries", []),
+                item.get("geo_queries", []),
+            )[:5]
+    return list(merged.values())
 
 
 def _prefer_text_value(deterministic_value: str, llm_value: str) -> str:
@@ -103,6 +136,10 @@ def _prefer_confidence(deterministic_confidence: str, llm_confidence: str) -> st
     if confidence_order.get(cleaned_llm, 0) > confidence_order.get(cleaned_deterministic, 0):
         return cleaned_llm
     return cleaned_deterministic
+
+
+def _confidence_rank(value: str) -> int:
+    return {"": 0, "low": 1, "medium": 2, "high": 3}.get(value.strip().lower(), 0)
 
 
 def _build_signal_text(

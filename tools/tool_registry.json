@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "enabled": true,
+      "spec_path": "tools/supabase/tool_spec.json",
+      "description": "Development-phase database tool for schema inspection, schema application, verification, and controlled CRUD operations through direct access."
+    }
+  ]
+}

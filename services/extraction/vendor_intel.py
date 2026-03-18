@@ -6,7 +6,9 @@ This module defines the schema used to represent extracted vendor intelligence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import re
+from typing import Any
 
 CANONICAL_LIFECYCLE_STAGES = [
     "Sign",
@@ -227,6 +229,7 @@ class VendorIntelligence:
     mission: str = ""
     usp: str = ""
     icp: list[str] = field(default_factory=list)
+    icp_buyer: list[dict[str, Any]] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)
     lifecycle_stages: list[str] = field(default_factory=list)
     pricing: list[str] = field(default_factory=list)
@@ -241,6 +244,10 @@ class VendorIntelligence:
     directory_fit: str = ""
     directory_category: str = ""
     include_in_directory: bool | None = None
+
+    def __post_init__(self) -> None:
+        """Normalize structured buyer-persona enrichment into a stable list-of-dicts shape."""
+        self.icp_buyer = normalize_icp_buyer_profiles(self.icp_buyer)
 
     def validate(self) -> None:
         """Validate the schema structure and types.
@@ -281,6 +288,11 @@ class VendorIntelligence:
             if not all(isinstance(item, str) for item in value):
                 raise TypeError(f"All items in {field_name} must be strings")
 
+        if not isinstance(self.icp_buyer, list):
+            raise TypeError("icp_buyer must be a list")
+        if not all(isinstance(item, dict) for item in self.icp_buyer):
+            raise TypeError("All items in icp_buyer must be objects")
+
         for field_name in ["free_trial", "soc2", "include_in_directory"]:
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, bool):
@@ -296,6 +308,92 @@ class VendorIntelligence:
                 "lifecycle_stages must only contain canonical stage names: "
                 + ", ".join(invalid_lifecycle_stages)
             )
+
+
+def normalize_icp_buyer_profiles(value: object) -> list[dict[str, Any]]:
+    """Return a normalized buyer-persona enrichment payload."""
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return []
+        return normalize_icp_buyer_profiles(parsed)
+
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen_personas: set[str] = set()
+    for raw_item in value:
+        if not isinstance(raw_item, dict):
+            continue
+
+        persona = str(raw_item.get("persona") or "").strip()
+        if not persona:
+            continue
+        lowered_persona = persona.lower()
+        if lowered_persona in seen_personas:
+            continue
+
+        confidence = _normalize_confidence_label(raw_item.get("confidence"))
+        google_queries = _normalize_query_list(raw_item.get("google_queries"))
+        geo_queries = _normalize_query_list(raw_item.get("geo_queries"))
+        evidence = _normalize_string_list(raw_item.get("evidence"))
+
+        normalized.append(
+            {
+                "persona": persona,
+                "confidence": confidence,
+                "evidence": evidence,
+                "google_queries": google_queries,
+                "geo_queries": geo_queries,
+            }
+        )
+        seen_personas.add(lowered_persona)
+
+    return normalized
+
+
+def summarize_icp_buyer_profiles(profiles: list[dict[str, Any]]) -> str:
+    """Return a readable summary of buyer personas for flat review surfaces."""
+    personas = [str(item.get("persona") or "").strip() for item in profiles if isinstance(item, dict)]
+    personas = [persona for persona in personas if persona]
+    return ", ".join(personas)
+
+
+def _normalize_query_list(value: object) -> list[str]:
+    queries = _normalize_string_list(value)
+    return queries[:5]
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    if isinstance(value, str):
+        candidates = [segment.strip() for segment in value.replace("\n", ",").replace("|", ",").split(",")]
+        normalized: list[str] = []
+        for candidate in candidates:
+            if candidate and candidate not in normalized:
+                normalized.append(candidate)
+        return normalized
+
+    if isinstance(value, list):
+        normalized = []
+        for item in value:
+            cleaned_item = str(item).strip()
+            if cleaned_item and cleaned_item not in normalized:
+                normalized.append(cleaned_item)
+        return normalized
+
+    return []
+
+
+def _normalize_confidence_label(value: object) -> str:
+    cleaned = str(value or "").strip().lower()
+    if cleaned in {"low", "medium", "high"}:
+        return cleaned
+    return ""
 
 
 def extract_vendor_intelligence(

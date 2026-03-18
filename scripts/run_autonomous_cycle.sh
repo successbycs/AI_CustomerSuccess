@@ -12,7 +12,13 @@ fi
 
 cd "$ROOT_DIR"
 
+if [[ -z "${AUTONOMOUS_CYCLE_ID:-}" ]]; then
+  AUTONOMOUS_CYCLE_ID="cycle-$(date -u +%Y%m%dT%H%M%SZ)"
+  export AUTONOMOUS_CYCLE_ID
+fi
+
 echo "== Autonomous audit =="
+echo "Cycle ID: $AUTONOMOUS_CYCLE_ID"
 "$PYTHON_BIN" scripts/autonomous_audit.py
 
 echo
@@ -42,42 +48,16 @@ if [[ -z "$CURRENT_FOCUS" ]]; then
   exit 1
 fi
 
-if [[ -n "${AUTONOMOUS_AGENT_RUNNER:-}" ]]; then
-  echo
-  echo "== Executing configured local agent runner =="
-  for PROMPT_PATH in \
-    "docs/agents/planner_agent.md" \
-    "docs/agents/builder_agent.md" \
-    "docs/agents/reviewer_agent.md" \
-    "docs/agents/qa_agent.md"; do
-    echo "Running $PROMPT_PATH for milestone $CURRENT_FOCUS"
-    "$AUTONOMOUS_AGENT_RUNNER" "$PROMPT_PATH" "$CURRENT_FOCUS"
-  done
+get_next_action_json() {
+  "$PYTHON_BIN" scripts/autonomous_controller.py next-action "$CURRENT_FOCUS" --json
+}
 
-  echo
-  echo "== Verification =="
-  "$PYTHON_BIN" scripts/autonomous_controller.py verify
+extract_json_field() {
+  local JSON_INPUT="$1"
+  local FIELD_NAME="$2"
+  printf '%s' "$JSON_INPUT" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('$FIELD_NAME', ''))"
+}
 
-  echo
-  echo "== Review / QA status recording =="
-  echo "Record reviewer outcome:"
-  echo "  $PYTHON_BIN scripts/autonomous_controller.py review $CURRENT_FOCUS --status pass|fail --note \"...\""
-  echo "Record QA outcome:"
-  echo "  $PYTHON_BIN scripts/autonomous_controller.py qa $CURRENT_FOCUS --status pass|fail --note \"...\" [--manual-checks-complete]"
-  echo "Complete only after verification, review, and QA pass:"
-  echo "  $PYTHON_BIN scripts/autonomous_controller.py complete $CURRENT_FOCUS"
-else
-  echo
-  echo "No AUTONOMOUS_AGENT_RUNNER configured."
-  echo "Generating repo-native local role packets instead."
-  for PROMPT_PATH in \
-    "docs/agents/planner_agent.md" \
-    "docs/agents/builder_agent.md" \
-    "docs/agents/reviewer_agent.md" \
-    "docs/agents/qa_agent.md"; do
-    "$PYTHON_BIN" scripts/local_agent_runner.py "$PROMPT_PATH" "$CURRENT_FOCUS"
-  done
-  echo
-  echo "You can still execute milestone verification and status transitions manually:"
-  echo "  $PYTHON_BIN scripts/autonomous_controller.py verify"
-fi
+echo
+echo "== Controller-owned iteration =="
+"$PYTHON_BIN" scripts/autonomous_controller.py auto-iterate "$CURRENT_FOCUS"

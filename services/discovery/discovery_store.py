@@ -84,10 +84,19 @@ def build_candidate_row(candidate_record: dict[str, object]) -> dict[str, Any]:
 def is_discovery_store_unavailable_error(error: Exception) -> bool:
     """Return True when the discovery candidate table is unavailable."""
     error_code = getattr(error, "code", "")
+    if not error_code:
+        for arg in getattr(error, "args", ()):
+            if isinstance(arg, dict) and isinstance(arg.get("code"), str):
+                error_code = arg["code"]
+                break
     error_message = str(error).lower()
-    if error_code == "PGRST205":
+    if error_code in {"PGRST204", "PGRST205"}:
         return True
-    return DISCOVERY_CANDIDATE_TABLE in error_message and "does not exist" in error_message
+    if f"could not find the '{DISCOVERY_CANDIDATE_TABLE}' column" in error_message:
+        return True
+    if supabase_client.is_persistence_unavailable_error(error):
+        return True
+    return DISCOVERY_CANDIDATE_TABLE in error_message and ("does not exist" in error_message or "schema cache" in error_message)
 
 
 def _coerce_int(value: object) -> int | None:

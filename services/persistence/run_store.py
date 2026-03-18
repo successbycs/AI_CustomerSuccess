@@ -76,10 +76,19 @@ def build_run_row(run_record: dict[str, object]) -> dict[str, Any]:
 def is_run_store_unavailable_error(error: Exception) -> bool:
     """Return True when the pipeline run table is unavailable."""
     error_code = getattr(error, "code", "")
+    if not error_code:
+        for arg in getattr(error, "args", ()):
+            if isinstance(arg, dict) and isinstance(arg.get("code"), str):
+                error_code = arg["code"]
+                break
     error_message = str(error).lower()
-    if error_code == "PGRST205":
+    if error_code in {"PGRST204", "PGRST205"}:
         return True
-    return PIPELINE_RUNS_TABLE in error_message and "does not exist" in error_message
+    if f"could not find the '{PIPELINE_RUNS_TABLE}' column" in error_message:
+        return True
+    if supabase_client.is_persistence_unavailable_error(error):
+        return True
+    return PIPELINE_RUNS_TABLE in error_message and ("does not exist" in error_message or "schema cache" in error_message)
 
 
 def _coerce_int(value: object) -> int | None:

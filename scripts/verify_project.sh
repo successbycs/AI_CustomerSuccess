@@ -18,7 +18,8 @@ echo "Running repo readiness audit"
 echo "Running controller smoke checks"
 "$PYTHON_BIN" scripts/autonomous_controller.py status >/dev/null
 "$PYTHON_BIN" scripts/autonomous_controller.py next >/dev/null
-"$PYTHON_BIN" scripts/autonomous_controller.py run-cycle >/dev/null
+"$PYTHON_BIN" scripts/autonomous_controller.py next-action >/dev/null
+"$PYTHON_BIN" scripts/autonomous_controller.py assert-artifacts >/dev/null
 
 echo "Running test suite"
 "$PYTHON_BIN" -m pytest

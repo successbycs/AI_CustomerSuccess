@@ -23,6 +23,7 @@ Check:
 - output artifacts
 - whether automated tests cover the changed behavior well enough to support milestone completion
 - whether runtime/manual checks are still required beyond the automated tests
+- whether declared tool use stayed within the repo tool registry and produced verifiable evidence
 
 Return:
 

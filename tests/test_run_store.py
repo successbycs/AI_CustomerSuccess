@@ -86,3 +86,22 @@ def test_list_run_records_reads_newest_runs():
         ("limit", 100),
         ("execute",),
     ]
+
+
+def test_is_run_store_unavailable_error_handles_schema_cache_column_errors():
+    class FakeError(Exception):
+        def __init__(self):
+            super().__init__(
+                {
+                    "message": "Could not find the 'run_status' column of 'pipeline_runs' in the schema cache",
+                    "code": "PGRST204",
+                }
+            )
+
+    assert run_store.is_run_store_unavailable_error(FakeError()) is True
+
+
+def test_is_run_store_unavailable_error_handles_connectivity_errors():
+    error = RuntimeError("Server disconnected without sending a response")
+
+    assert run_store.is_run_store_unavailable_error(error) is True

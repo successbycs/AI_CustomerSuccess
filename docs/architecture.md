@@ -7,7 +7,7 @@ Level 1 deterministic extraction and Level 2 LLM extraction using the OpenAI Res
 
 Current implementation status:
 the active code path in this repo is deterministic-first and runs Level 1 extraction
-plus an active optional Level 2 LLM extraction pass with deterministic fallback.
+plus an active default-on Level 2 LLM extraction pass with deterministic fallback.
 
 Current repo status:
 - the repo already includes directory export, vendor review export, static directory pages, a thin admin API, operator actions, and run tracking
@@ -153,7 +153,7 @@ Exploration stays on the vendor domain, uses the limits and page patterns from `
 
 services/extraction/
 
-Implements the deterministic extraction layer plus the active optional LLM enrichment layer.
+Implements the deterministic extraction layer plus the active LLM-default enrichment layer.
 
 page_text_extractor.py
 
@@ -193,6 +193,7 @@ llm_extractor.py
 Level 2 semantic extraction using the OpenAI Responses API.
 
 Runtime settings such as enable flag, default model, request timeout, and payload bounds are loaded from `config/pipeline_config.json`.
+The intended operating mode is that LLM extraction runs on every normal pipeline execution when configuration is valid. Deterministic extraction remains the resilience fallback when the LLM layer is unavailable.
 
 Python sends vendor website text to the OpenAI API and receives structured JSON containing richer commercial intelligence including:
 
@@ -213,7 +214,7 @@ merge_results.py
 
 Combines the deterministic extraction results and the LLM extraction results into a single `VendorIntelligence` object.
 
-If the LLM call fails, deterministic results are still used.
+If the LLM call fails, deterministic results are still used and the fallback must remain visible at the operator/run-summary layer.
 LLM output is used to review and enrich the same core vendor fields as deterministic extraction, but vendor identity, lifecycle stages, and evidence URLs remain deterministic and system-owned.
 The merge keeps deterministic non-empty values unless the LLM clearly improves them, and it never replaces stronger deterministic signals with empty or weaker values.
 
@@ -460,7 +461,7 @@ python -m services.pipeline.scheduler --run-now digest
 
 8. Deterministic extraction runs via `vendor_intel.py`.
 
-9. Optional LLM enrichment runs when enabled in config.
+9. LLM enrichment runs by default when valid runtime configuration is present.
 
 10. Deterministic and LLM signals are merged into one `VendorIntelligence` profile.
 
@@ -602,7 +603,7 @@ Homepage enrichment uses Python requests.
 Extraction is currently deterministic-first:
 
 Level 1 deterministic rules  
-Level 2 OpenAI semantic extraction with deterministic fallback
+Level 2 OpenAI semantic extraction with deterministic, operator-visible fallback
 
 Lifecycle classification is deterministic and handled by Python.
 

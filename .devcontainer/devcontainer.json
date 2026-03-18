@@ -16,5 +16,5 @@
       }
     }
   },
-  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt"
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt && python scripts/autonomous_audit.py && python scripts/autonomous_controller.py status"
 }

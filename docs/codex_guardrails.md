@@ -26,7 +26,7 @@ The canonical Customer Success lifecycle is defined in `docs/product_design.md` 
 - Do not redesign the architecture unless the milestone explicitly requires it
 - Deterministic extraction remains the baseline safety net
 - Lifecycle stage assignment remains deterministic in Python
-- LLM enrichment is optional, bounded, and must fail safely
+- LLM enrichment is default-on for normal runs, bounded, and must fail safely with operator-visible fallback
 - Supabase is the intended canonical data store even when local fallback artifacts exist
 - Google Sheets is an ops/export layer, not the source of truth
 - Public directory pages remain static for v1
@@ -51,6 +51,14 @@ The current runtime source of truth is still mixed:
 - `config/scheduler.toml` drives scheduler timing
 
 Do not assume the other split TOML config files are already the active runtime source of truth unless the code confirms it.
+
+## Secret Handling Rule
+
+- Do not hard-code broker credentials, database credentials, API keys, tokens, or connection strings in the repo
+- Do not commit real credentials to docs, examples, tests, prompts, tool specs, or scripts
+- Keep real secrets only in environment variables, a secret manager, or other untracked local operator configuration
+- Example configs must use placeholders, not real values
+- Tool backends that need external access must reference environment variables such as `DATABASE_URL` or `SUPABASE_DB_URL` instead of embedding credentials
 
 ## Separation of Responsibilities
 
@@ -84,6 +92,9 @@ After implementation:
 - treat missing test coverage as a completion problem, not a documentation footnote
 - confirm expected artifacts are produced when the milestone requires them
 - update affected docs before marking the milestone complete
+- if verification fails but the issue is actionable inside the active milestone, keep iterating within that milestone instead of stopping at the first failed verify result
+- treat missing credentials, missing external schema, missing infrastructure, and required manual checks as explicit blockers rather than retrying indefinitely
+- keep retries bounded by the controller policy; do not allow unbounded milestone loops
 
 ## Review Rules
 
@@ -94,3 +105,6 @@ When acting as reviewer or QA:
 - call out doc vs implementation mismatches
 - call out hidden fallback dependence
 - call out silent failure risks
+- distinguish actionable repo fixes from external blockers
+- reject stale artifacts as milestone proof when the milestone requires fresh runtime evidence
+- require explicit manual-check completion for UI, operator, scheduler, container, or external-system verification

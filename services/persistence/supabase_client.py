@@ -20,6 +20,7 @@ VENDOR_PROFILE_SELECT = ",".join(
         "mission",
         "usp",
         "icp",
+        "icp_buyer",
         "use_cases",
         "lifecycle_stages",
         "pricing",
@@ -37,6 +38,42 @@ VENDOR_PROFILE_SELECT = ",".join(
         "last_updated",
         "is_new",
     ]
+)
+VENDOR_PROFILE_COLUMNS = tuple(VENDOR_PROFILE_SELECT.split(","))
+VENDOR_WRITE_COLUMNS = (
+    "name",
+    "website",
+    "source",
+    "confidence",
+    "mission",
+    "usp",
+    "icp",
+    "icp_buyer",
+    "pricing",
+    "free_trial",
+    "soc2",
+    "founded",
+    "use_cases",
+    "lifecycle_stages",
+    "case_studies",
+    "customers",
+    "value_statements",
+    "evidence_urls",
+    "directory_fit",
+    "directory_category",
+    "include_in_directory",
+    "raw_description",
+    "last_updated",
+    "is_new",
+)
+EXPORT_READY_VENDOR_COLUMNS = (
+    "mission",
+    "usp",
+    "use_cases",
+    "confidence",
+    "directory_fit",
+    "directory_category",
+    "include_in_directory",
 )
 
 
@@ -76,16 +113,40 @@ def _create_supabase_client(supabase_url: str, supabase_key: str) -> "Client":
 
 
 def vendor_exists(website: str, client: "Client | None" = None) -> bool:
-    """Return True when a vendor already exists in cs_vendors."""
+    """Return True when a vendor already exists in cs_vendors and is export-ready."""
     supabase = client or get_supabase_client()
     response = (
         supabase.table("cs_vendors")
-        .select("website")
+        .select("website,directory_fit,directory_category,include_in_directory")
         .eq("website", website)
         .limit(1)
         .execute()
     )
-    return bool(response.data)
+    rows = list(response.data or [])
+    if not rows:
+        return False
+    return _vendor_row_has_review_signal(rows[0])
+
+
+def supports_export_ready_vendor_profiles(client: "Client | None" = None) -> bool:
+    """Return True when persisted vendor rows are rich enough to reuse for exports and dedupe."""
+    try:
+        supabase = client or get_supabase_client()
+        available_columns = _available_vendor_profile_columns(supabase)
+    except Exception:
+        return False
+    return all(column in available_columns for column in EXPORT_READY_VENDOR_COLUMNS)
+
+
+def _vendor_row_has_review_signal(row: dict[str, Any]) -> bool:
+    """Return True when a persisted vendor row has the minimum review/export fields populated."""
+    return any(
+        (
+            str(row.get("directory_fit") or "").strip(),
+            str(row.get("directory_category") or "").strip(),
+            row.get("include_in_directory") is not None,
+        )
+    )
 
 
 def upsert_vendor_result(
@@ -104,25 +165,24 @@ def upsert_vendor_result(
 def list_directory_vendors(client: "Client | None" = None) -> list[dict[str, Any]]:
     """Return vendors currently marked for public directory inclusion."""
     supabase = client or get_supabase_client()
+    available_columns = _available_vendor_profile_columns(supabase)
     response = (
         supabase.table("cs_vendors")
-        .select(VENDOR_PROFILE_SELECT)
-        .eq("include_in_directory", True)
+        .select(",".join(available_columns))
         .execute()
     )
-    return list(response.data or [])
+    rows = list(response.data or [])
+    return [row for row in rows if row.get("include_in_directory") is True]
 
 
 def list_vendor_profiles(*, limit: int = 200, client: "Client | None" = None) -> list[dict[str, Any]]:
     """Return enriched vendor profiles for read-only admin visibility."""
     supabase = client or get_supabase_client()
-    response = (
-        supabase.table("cs_vendors")
-        .select(VENDOR_PROFILE_SELECT)
-        .order("last_updated", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    available_columns = _available_vendor_profile_columns(supabase)
+    query = supabase.table("cs_vendors").select(",".join(available_columns))
+    if "last_updated" in available_columns:
+        query = query.order("last_updated", desc=True)
+    response = query.limit(limit).execute()
     return list(response.data or [])
 
 
@@ -165,13 +225,14 @@ def update_vendor_admin_fields(
 def find_vendor_by_lookup(vendor_lookup: str, client: "Client | None" = None) -> dict[str, Any] | None:
     """Find one vendor by website or case-insensitive name match."""
     supabase = client or get_supabase_client()
+    select_columns = ",".join(_available_vendor_profile_columns(supabase))
     lookup = vendor_lookup.strip()
     if not lookup:
         return None
 
     website_matches = (
         supabase.table("cs_vendors")
-        .select(VENDOR_PROFILE_SELECT)
+        .select(select_columns)
         .eq("website", lookup if lookup.startswith("http") else f"https://{lookup}")
         .limit(1)
         .execute()
@@ -181,7 +242,7 @@ def find_vendor_by_lookup(vendor_lookup: str, client: "Client | None" = None) ->
 
     exact_name_matches = (
         supabase.table("cs_vendors")
-        .select(VENDOR_PROFILE_SELECT)
+        .select(select_columns)
         .ilike("name", lookup)
         .limit(1)
         .execute()
@@ -194,19 +255,98 @@ def find_vendor_by_lookup(vendor_lookup: str, client: "Client | None" = None) ->
 
 def is_persistence_unavailable_error(error: Exception) -> bool:
     """Return True for missing-table or unavailable persistence errors."""
-    error_code = getattr(error, "code", "")
+    error_code = _error_code(error)
     error_message = str(error).lower()
 
-    if error_code == "PGRST205":
+    if error_code in {"PGRST204", "PGRST205"}:
         return True
 
     if "column cs_vendors." in error_message and "does not exist" in error_message:
+        return True
+
+    if "could not find the 'cs_vendors' column" in error_message:
+        return True
+
+    if _is_connectivity_error_message(error_message):
         return True
 
     return all(marker in error_message for marker in ["cs_vendors", "does not exist"]) or any(
         marker in error_message for marker in [
             "could not find the table",
             "public.cs_vendors",
+            "schema cache",
+        ]
+    )
+
+
+def get_vendor_profile_columns() -> tuple[str, ...]:
+    """Return the expected persisted vendor profile columns."""
+    return VENDOR_PROFILE_COLUMNS
+
+
+def get_vendor_write_columns() -> tuple[str, ...]:
+    """Return the columns required for vendor upserts to succeed."""
+    return VENDOR_WRITE_COLUMNS
+
+
+def _error_code(error: Exception) -> str:
+    """Best-effort extraction of API error codes from Supabase/PostgREST exceptions."""
+    direct_code = getattr(error, "code", "")
+    if isinstance(direct_code, str) and direct_code.strip():
+        return direct_code.strip()
+
+    for arg in getattr(error, "args", ()):
+        if isinstance(arg, dict):
+            code = arg.get("code")
+            if isinstance(code, str) and code.strip():
+                return code.strip()
+    return ""
+
+
+def _available_vendor_profile_columns(supabase: "Client") -> tuple[str, ...]:
+    """Return the subset of vendor profile columns currently accepted by Supabase."""
+    available_columns = list(VENDOR_PROFILE_COLUMNS)
+    while available_columns:
+        try:
+            (
+                supabase.table("cs_vendors")
+                .select(",".join(available_columns))
+                .limit(1)
+                .execute()
+            )
+            return tuple(available_columns)
+        except Exception as error:
+            missing_column = _missing_vendor_column_name(error)
+            if not missing_column or missing_column not in available_columns:
+                raise
+            available_columns.remove(missing_column)
+    raise RuntimeError("No readable vendor profile columns are available in cs_vendors")
+
+
+def _missing_vendor_column_name(error: Exception) -> str | None:
+    """Extract one missing vendor column name from common Supabase/PostgREST errors."""
+    error_message = str(error).lower()
+    for column in VENDOR_PROFILE_COLUMNS:
+        if f"column cs_vendors.{column.lower()} does not exist" in error_message:
+            return column
+        if f"could not find the '{column.lower()}' column of 'cs_vendors'" in error_message:
+            return column
+    return None
+
+
+def _is_connectivity_error_message(error_message: str) -> bool:
+    """Return True for network/connectivity failures that should degrade safely."""
+    return any(
+        marker in error_message
+        for marker in [
+            "all connection attempts failed",
+            "connection refused",
+            "connecterror",
+            "name or service not known",
+            "network is unreachable",
+            "server disconnected",
+            "temporary failure in name resolution",
+            "timed out",
         ]
     )
 
@@ -228,6 +368,7 @@ def build_vendor_row(
         "mission": intelligence.mission or _extract_mission(raw_description or ""),
         "usp": intelligence.usp or (intelligence.value_statements[0] if intelligence.value_statements else None),
         "icp": intelligence.icp or [],
+        "icp_buyer": intelligence.icp_buyer or [],
         "pricing": "|".join(intelligence.pricing) if intelligence.pricing else None,
         "free_trial": intelligence.free_trial if intelligence.free_trial is not None else _detect_text_boolean(
             raw_description or "",

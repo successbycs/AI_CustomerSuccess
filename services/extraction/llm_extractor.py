@@ -11,6 +11,7 @@ from typing import Any, Callable
 import requests
 
 from services.config.load_config import load_pipeline_config
+from services.extraction.vendor_intel import normalize_icp_buyer_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,30 @@ LLM_RESULT_SCHEMA = {
         "icp": {
             "type": "array",
             "items": {"type": "string"},
+        },
+        "icp_buyer": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "persona": {"type": "string"},
+                    "confidence": {"type": "string"},
+                    "evidence": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "google_queries": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "geo_queries": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["persona", "confidence", "evidence", "google_queries", "geo_queries"],
+                "additionalProperties": False,
+            },
         },
         "use_cases": {
             "type": "array",
@@ -66,6 +91,7 @@ LLM_RESULT_SCHEMA = {
         "mission",
         "usp",
         "icp",
+        "icp_buyer",
         "use_cases",
         "pricing",
         "free_trial",
@@ -88,6 +114,7 @@ class LLMExtractionResult:
     mission: str = ""
     usp: str = ""
     icp: list[str] = field(default_factory=list)
+    icp_buyer: list[dict[str, Any]] = field(default_factory=list)
     use_cases: list[str] = field(default_factory=list)
     pricing: list[str] = field(default_factory=list)
     free_trial: bool | None = None
@@ -204,6 +231,9 @@ def extract_vendor_intelligence(
                             "Review this crawled website evidence and extract vendor intelligence.\n"
                             "Return the structured result using the provided schema.\n"
                             "Requirements:\n"
+                            "- icp_buyer must be an array of buyer persona objects with persona, confidence, evidence, google_queries, and geo_queries\n"
+                            "- google_queries and geo_queries must each contain up to 5 realistic searches/prompts the buyer would use to find this vendor category\n"
+                            "- buyer personas should reflect who the website messaging is aimed at, not generic end users\n"
                             "- icp, use_cases, case_studies, customers, and value_statements must be arrays of short strings\n"
                             "- pricing must be an array of short pricing signals like contact sales, per seat, per user, per month, or per year\n"
                             "- founded should be a year or short founded string if present, else empty string\n"
@@ -357,6 +387,7 @@ def _parse_result(content: str) -> LLMExtractionResult:
         mission=_clean_string(raw_result.get("mission")),
         usp=_clean_string(raw_result.get("usp")),
         icp=_normalize_string_list(raw_result.get("icp")),
+        icp_buyer=normalize_icp_buyer_profiles(raw_result.get("icp_buyer")),
         use_cases=_normalize_string_list(raw_result.get("use_cases")),
         pricing=_normalize_string_list(raw_result.get("pricing")),
         free_trial=_normalize_optional_bool(raw_result.get("free_trial")),

@@ -1,5 +1,6 @@
 """Tests for the explicit Phase 2 enrichment runner."""
 
+from services.persistence import supabase_client
 from services.extraction.llm_extractor import LLMExtractionResult
 from services.extraction.vendor_intel import VendorIntelligence
 from services.pipeline.enrichment_runner import run_enrichment_phase
@@ -135,4 +136,62 @@ def test_run_enrichment_phase_marks_fetch_failures_without_crashing():
         }
     ]
     assert llm_success_count == 0
+    assert llm_fallback_count == 0
+
+
+def test_run_enrichment_phase_continues_when_persistence_schema_is_unavailable(monkeypatch):
+    queued_vendor_candidates = [
+        {"vendor_name": "SignalAI", "website": "https://signal.example.com", "candidate_domain": "signal.example.com"},
+        {"vendor_name": "BeaconAI", "website": "https://beacon.example.com", "candidate_domain": "beacon.example.com"},
+    ]
+    deterministic = VendorIntelligence(vendor_name="SignalAI", website="https://signal.example.com", confidence="medium")
+    profiles = {
+        "signal.example.com": VendorIntelligence(
+            vendor_name="SignalAI",
+            website="https://signal.example.com",
+            confidence="high",
+            include_in_directory=True,
+        ),
+        "beacon.example.com": VendorIntelligence(
+            vendor_name="BeaconAI",
+            website="https://beacon.example.com",
+            confidence="high",
+            include_in_directory=True,
+        ),
+    }
+    upsert_calls: list[str] = []
+
+    class MissingColumnError(Exception):
+        def __init__(self):
+            super().__init__(
+                {
+                    "message": "Could not find the 'case_studies' column of 'cs_vendors' in the schema cache",
+                    "code": "PGRST204",
+                }
+            )
+
+    def fake_upsert(vendor, homepage_payload, profile):
+        upsert_calls.append(profile.vendor_name)
+        if profile.vendor_name == "SignalAI":
+            raise MissingColumnError()
+
+    monkeypatch.setattr(supabase_client, "is_persistence_unavailable_error", lambda error: True)
+
+    rows, enrichment_results, llm_success_count, llm_fallback_count = run_enrichment_phase(
+        queued_vendor_candidates,
+        fetch_vendor_homepage_fn=lambda vendor: {"vendor_name": vendor["vendor_name"], "website": vendor["website"], "text": "Homepage text"},
+        explore_vendor_site_fn=lambda payload: {"homepage": payload, "extra_pages": []},
+        extract_vendor_intelligence_fn=lambda pages: deterministic,
+        extract_vendor_intelligence_llm_fn=lambda pages: LLMExtractionResult(is_cs_relevant=True, confidence="high"),
+        merge_vendor_intelligence_fn=lambda deterministic, _llm_result: deterministic,
+        build_vendor_profile_fn=lambda vendor, pages, intelligence: profiles[vendor["candidate_domain"]],
+        vendor_intelligence_to_sheet_row_fn=lambda intelligence: {"vendor_name": intelligence.vendor_name},
+        upsert_vendor_result_fn=fake_upsert,
+        drop_reason_fn=lambda _profile, _llm_result: "",
+    )
+
+    assert upsert_calls == ["SignalAI"]
+    assert rows == [{"vendor_name": "SignalAI"}, {"vendor_name": "BeaconAI"}]
+    assert [result["status"] for result in enrichment_results] == ["enriched", "enriched"]
+    assert llm_success_count == 2
     assert llm_fallback_count == 0

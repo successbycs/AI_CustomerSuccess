@@ -76,7 +76,12 @@ def run_mvp_pipeline(
     run_enrichment_phase_fn = run_enrichment_phase_fn or enrichment_runner.run_enrichment_phase
 
     if vendor_exists_fn is None and supabase_client.is_configured():
-        vendor_exists_fn = supabase_client.vendor_exists
+        if supabase_client.supports_export_ready_vendor_profiles():
+            vendor_exists_fn = supabase_client.vendor_exists
+        else:
+            logger.warning(
+                "Persistence schema is not export-ready, continuing without deduplication against existing vendors"
+            )
 
     if upsert_vendor_result_fn is None and supabase_client.is_configured():
         upsert_vendor_result_fn = supabase_client.upsert_vendor_result
@@ -145,11 +150,17 @@ def run_mvp_pipeline(
         _write_run_snapshot(completed_run_record)
         _write_candidate_review_snapshot(candidate_records)
 
-        google_sheets.publish_ops_review_export(
-            run_record=completed_run_record,
-            candidate_records=candidate_records,
-            enrichment_results=enrichment_results,
-        )
+        try:
+            google_sheets.publish_ops_review_export(
+                run_record=completed_run_record,
+                candidate_records=candidate_records,
+                enrichment_results=enrichment_results,
+            )
+        except Exception as error:
+            logger.warning(
+                "Google Sheets ops review export failed, continuing with local artifacts only: %s",
+                error,
+            )
         dataset = _export_directory_dataset(enrichment_results)
         review_dataset = _export_vendor_review_dataset(enrichment_results)
 
@@ -362,17 +373,35 @@ def _candidate_status_from_enrichment_status(status: str) -> str:
 
 def _export_directory_dataset(enrichment_results: list[dict[str, object]]) -> list[dict[str, object]]:
     """Export the directory dataset from Supabase or current run profiles."""
-    fallback_profiles = [
-        result["profile"]
-        for result in enrichment_results
-        if isinstance(result.get("profile"), VendorIntelligence)
-    ]
+    fallback_profiles = _current_run_export_profiles(enrichment_results)
+    if fallback_profiles:
+        try:
+            dataset = directory_dataset.export_directory_dataset(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
+        except Exception as error:
+            logger.warning("Directory dataset export from current run profiles failed: %s", error)
+            return []
+        logger.info("Exported %s directory dataset row(s) from current run profiles", len(dataset))
+        return dataset
     try:
         dataset = directory_dataset.export_directory_dataset(fallback_profiles=fallback_profiles)
+        if not dataset and fallback_profiles:
+            logger.warning(
+                "Directory dataset export returned no includable Supabase rows, falling back to current run profiles"
+            )
+            dataset = directory_dataset.export_directory_dataset(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
     except Exception as error:
         logger.warning("Directory dataset export from Supabase unavailable, falling back to current run profiles: %s", error)
         try:
-            dataset = directory_dataset.export_directory_dataset(fallback_profiles=fallback_profiles)
+            dataset = directory_dataset.export_directory_dataset(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
         except Exception as fallback_error:
             logger.warning("Directory dataset export unavailable: %s", fallback_error)
             return []
@@ -382,19 +411,71 @@ def _export_directory_dataset(enrichment_results: list[dict[str, object]]) -> li
 
 def _export_vendor_review_dataset(enrichment_results: list[dict[str, object]]) -> list[dict[str, object]]:
     """Export a slim vendor review dataset and HTML report."""
-    fallback_profiles = [
-        result["profile"]
-        for result in enrichment_results
-        if isinstance(result.get("profile"), VendorIntelligence)
-    ]
+    fallback_profiles = _current_run_export_profiles(enrichment_results)
+    if fallback_profiles:
+        try:
+            dataset = vendor_review_dataset.export_vendor_review_artifacts(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
+        except Exception as error:
+            logger.warning("Vendor review export from current run profiles failed: %s", error)
+            return []
+        logger.info("Exported %s vendor review row(s) from current run profiles", len(dataset))
+        return dataset
     try:
         dataset = vendor_review_dataset.export_vendor_review_artifacts(fallback_profiles=fallback_profiles)
+        if _review_dataset_needs_fallback(dataset, fallback_profiles=fallback_profiles):
+            logger.warning(
+                "Vendor review export returned stale Supabase rows, falling back to current run profiles"
+            )
+            dataset = vendor_review_dataset.export_vendor_review_artifacts(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
     except Exception as error:
         logger.warning("Vendor review export from Supabase unavailable, falling back to current run profiles: %s", error)
         try:
-            dataset = vendor_review_dataset.export_vendor_review_artifacts(fallback_profiles=fallback_profiles)
+            dataset = vendor_review_dataset.export_vendor_review_artifacts(
+                fallback_profiles=fallback_profiles,
+                prefer_fallback_profiles=True,
+            )
         except Exception as fallback_error:
             logger.warning("Vendor review export unavailable: %s", fallback_error)
             return []
     logger.info("Exported %s vendor review row(s)", len(dataset))
     return dataset
+
+
+def _current_run_export_profiles(enrichment_results: list[dict[str, object]]) -> list[VendorIntelligence]:
+    """Return current-run profiles that actually survived enrichment."""
+    return [
+        result["profile"]
+        for result in enrichment_results
+        if not str(result.get("status", "")).strip().startswith(("dropped_", "failed_"))
+        and isinstance(result.get("profile"), VendorIntelligence)
+    ]
+
+
+def _review_dataset_needs_fallback(
+    dataset: list[dict[str, object]],
+    *,
+    fallback_profiles: list[VendorIntelligence],
+) -> bool:
+    """Return True when the persisted review dataset is empty or lacks review signal."""
+    if not fallback_profiles:
+        return False
+    if not dataset:
+        return True
+
+    def has_review_signal(row: dict[str, object]) -> bool:
+        return any(
+            (
+                str(row.get("confidence") or "").strip(),
+                str(row.get("directory_fit") or "").strip(),
+                str(row.get("directory_category") or "").strip(),
+                row.get("include_in_directory") is not None,
+            )
+        )
+
+    return not any(has_review_signal(row) for row in dataset)

@@ -28,6 +28,15 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
         mission="Baseline mission",
         usp="Baseline usp",
         icp=["SaaS companies"],
+        icp_buyer=[
+            {
+                "persona": "VP Customer Success",
+                "confidence": "medium",
+                "evidence": ["health scoring"],
+                "google_queries": ["health scoring software"],
+                "geo_queries": ["What software improves customer health scoring?"],
+            }
+        ],
         use_cases=["health scoring"],
         lifecycle_stages=["Adopt"],
         pricing=["contact sales"],
@@ -45,6 +54,22 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
         mission="AI customer success platform that reduces churn and automates onboarding.",
         usp="Predict churn and speed time to value.",
         icp=["customer success teams"],
+        icp_buyer=[
+            {
+                "persona": "VP Customer Success",
+                "confidence": "high",
+                "evidence": ["reduce churn"],
+                "google_queries": ["customer success software for reducing churn"],
+                "geo_queries": ["What AI tools reduce churn for SaaS teams?"],
+            },
+            {
+                "persona": "Chief Customer Officer",
+                "confidence": "medium",
+                "evidence": ["onboarding automation"],
+                "google_queries": ["customer success platform for enterprise saas"],
+                "geo_queries": ["Which customer success vendors support the full lifecycle?"],
+            },
+        ],
         use_cases=["churn prediction", "onboarding automation"],
         pricing=["per seat"],
         free_trial=True,
@@ -63,6 +88,28 @@ def test_merge_vendor_intelligence_prefers_valid_llm_fields_and_keeps_determinis
     assert merged.mission == "AI customer success platform that reduces churn and automates onboarding."
     assert merged.usp == "Predict churn and speed time to value."
     assert merged.icp == ["SaaS companies", "customer success teams"]
+    assert merged.icp_buyer == [
+        {
+            "persona": "VP Customer Success",
+            "confidence": "high",
+            "evidence": ["health scoring", "reduce churn"],
+            "google_queries": [
+                "health scoring software",
+                "customer success software for reducing churn",
+            ],
+            "geo_queries": [
+                "What software improves customer health scoring?",
+                "What AI tools reduce churn for SaaS teams?",
+            ],
+        },
+        {
+            "persona": "Chief Customer Officer",
+            "confidence": "medium",
+            "evidence": ["onboarding automation"],
+            "google_queries": ["customer success platform for enterprise saas"],
+            "geo_queries": ["Which customer success vendors support the full lifecycle?"],
+        },
+    ]
     assert merged.use_cases == ["health scoring", "churn prediction", "onboarding automation"]
     assert merged.lifecycle_stages == ["Adopt"]
     assert merged.pricing == ["contact sales", "per seat"]
@@ -83,6 +130,15 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
         mission="Customer success platform for onboarding and renewals.",
         usp="Reduce churn for CS teams.",
         icp=["SaaS companies"],
+        icp_buyer=[
+            {
+                "persona": "VP Customer Success",
+                "confidence": "high",
+                "evidence": ["renewals"],
+                "google_queries": ["renewal forecasting software"],
+                "geo_queries": ["What tools improve SaaS renewals?"],
+            }
+        ],
         use_cases=["renewal forecasting"],
         lifecycle_stages=["Renew"],
         pricing=["contact sales"],
@@ -100,6 +156,15 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
         mission="Short summary.",
         usp="Short usp.",
         icp=["support teams"],
+        icp_buyer=[
+            {
+                "persona": "Customer Support Leader",
+                "confidence": "low",
+                "evidence": ["support"],
+                "google_queries": ["support tools"],
+                "geo_queries": ["What support tools use AI?"],
+            }
+        ],
         use_cases=["onboarding automation"],
         pricing=["per seat"],
         free_trial=False,
@@ -116,6 +181,22 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
     assert merged.mission == deterministic.mission
     assert merged.usp == deterministic.usp
     assert merged.icp == ["SaaS companies", "support teams"]
+    assert merged.icp_buyer == [
+        {
+            "persona": "VP Customer Success",
+            "confidence": "high",
+            "evidence": ["renewals"],
+            "google_queries": ["renewal forecasting software"],
+            "geo_queries": ["What tools improve SaaS renewals?"],
+        },
+        {
+            "persona": "Customer Support Leader",
+            "confidence": "low",
+            "evidence": ["support"],
+            "google_queries": ["support tools"],
+            "geo_queries": ["What support tools use AI?"],
+        },
+    ]
     assert merged.use_cases == ["renewal forecasting", "onboarding automation"]
     assert merged.pricing == ["contact sales", "per seat"]
     assert merged.free_trial is True

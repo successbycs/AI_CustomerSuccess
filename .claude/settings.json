@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 scripts/autonomous_audit.py)",
+      "Bash(python3 scripts/autonomous_controller.py status)",
+      "Bash(python3 scripts/autonomous_controller.py next)"
+    ]
+  }
+}

@@ -82,3 +82,22 @@ def test_list_candidate_records_reads_most_recent_candidates():
         ("limit", 200),
         ("execute",),
     ]
+
+
+def test_is_discovery_store_unavailable_error_handles_schema_cache_column_errors():
+    class FakeError(Exception):
+        def __init__(self):
+            super().__init__(
+                {
+                    "message": "Could not find the 'candidate_status' column of 'discovery_candidates' in the schema cache",
+                    "code": "PGRST204",
+                }
+            )
+
+    assert discovery_store.is_discovery_store_unavailable_error(FakeError()) is True
+
+
+def test_is_discovery_store_unavailable_error_handles_connectivity_errors():
+    error = RuntimeError("Temporary failure in name resolution")
+
+    assert discovery_store.is_discovery_store_unavailable_error(error) is True

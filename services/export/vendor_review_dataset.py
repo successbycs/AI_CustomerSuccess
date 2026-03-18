@@ -7,7 +7,11 @@ from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from services.extraction.vendor_intel import VendorIntelligence
+from services.extraction.vendor_intel import (
+    VendorIntelligence,
+    normalize_icp_buyer_profiles,
+    summarize_icp_buyer_profiles,
+)
 from services.persistence import supabase_client
 
 if TYPE_CHECKING:
@@ -25,9 +29,14 @@ def export_vendor_review_artifacts(
     html_output_path: Path | None = None,
     client: "Client | None" = None,
     fallback_profiles: list[VendorIntelligence] | None = None,
+    prefer_fallback_profiles: bool = False,
 ) -> list[dict[str, Any]]:
     """Write a slim JSON dataset plus a self-contained HTML review report."""
-    dataset = build_vendor_review_dataset(client=client, fallback_profiles=fallback_profiles)
+    dataset = build_vendor_review_dataset(
+        client=client,
+        fallback_profiles=fallback_profiles,
+        prefer_fallback_profiles=prefer_fallback_profiles,
+    )
     dataset_output_path = dataset_output_path or DEFAULT_VENDOR_REVIEW_DATASET_PATH
     html_output_path = html_output_path or DEFAULT_VENDOR_REVIEW_HTML_PATH
     write_vendor_review_dataset(dataset, dataset_output_path)
@@ -39,10 +48,13 @@ def build_vendor_review_dataset(
     client: "Client | None" = None,
     *,
     fallback_profiles: list[VendorIntelligence] | None = None,
+    prefer_fallback_profiles: bool = False,
 ) -> list[dict[str, Any]]:
     """Return a review-friendly vendor subset from Supabase or current-run profiles."""
     rows: list[dict[str, Any]]
-    if client is not None or supabase_client.is_configured():
+    if prefer_fallback_profiles:
+        rows = []
+    elif client is not None or supabase_client.is_configured():
         try:
             rows = supabase_client.list_vendor_profiles(limit=500, client=client)
         except Exception:
@@ -76,12 +88,15 @@ def _normalize_vendor_row(row: dict[str, Any]) -> dict[str, Any]:
     pricing = _list_value(row.get("pricing"))
     evidence_urls = _list_value(row.get("evidence_urls"))
     lifecycle_stages = _list_value(row.get("lifecycle_stages"))
+    icp_buyer = normalize_icp_buyer_profiles(row.get("icp_buyer"))
 
     return {
         "vendor_name": _string_value(row.get("name") or row.get("vendor_name")),
         "website": _string_value(row.get("website")),
         "source": _string_value(row.get("source")),
         "mission_summary": _summary_text(mission or usp),
+        "icp_buyer": icp_buyer,
+        "icp_buyer_summary": summarize_icp_buyer_profiles(icp_buyer),
         "use_case_summary": ", ".join(use_cases[:3]),
         "pricing_summary": ", ".join(pricing[:3]),
         "lifecycle_stages": lifecycle_stages,
@@ -104,6 +119,7 @@ def _profile_to_vendor_row(profile: VendorIntelligence) -> dict[str, Any]:
         "source": profile.source,
         "mission": profile.mission,
         "usp": profile.usp,
+        "icp_buyer": profile.icp_buyer,
         "use_cases": profile.use_cases,
         "pricing": profile.pricing,
         "lifecycle_stages": profile.lifecycle_stages,

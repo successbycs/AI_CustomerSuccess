@@ -44,7 +44,7 @@
     },
     {
       "id": "M05",
-      "title": "Optional LLM enrichment and safe merge",
+      "title": "LLM-default enrichment and safe merge",
       "status": "complete",
       "dependencies": [
         "M04"
@@ -73,13 +73,13 @@
       ],
       "verify": [
         ".venv/bin/python -m pytest tests/test_directory_dataset.py tests/test_vendor_review_dataset.py tests/test_google_sheets.py",
-        ".venv/bin/python scripts/export_directory_dataset.py"
+        ".venv/bin/python scripts/run_pipeline.py --no-serve-preview"
       ]
     },
     {
       "id": "M08",
       "title": "Public directory experience",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
         "M07"
       ],
@@ -91,7 +91,7 @@
     {
       "id": "M09",
       "title": "Admin visibility and operator actions",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
         "M08"
       ],
@@ -102,7 +102,7 @@
     {
       "id": "M10",
       "title": "Run tracking and scheduled operation hardening",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
         "M09"
       ],
@@ -163,11 +163,27 @@
       ]
     },
     {
-      "id": "M14",
-      "title": "Container and devcontainer parity",
-      "status": "not_started",
+      "id": "M13B",
+      "title": "Autonomous execution backend integration",
+      "status": "complete",
       "dependencies": [
         "M13"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/autonomous_audit.py",
+        ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+        ".venv/bin/python scripts/local_agent_runner.py docs/agents/planner_agent.md M13B",
+        ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13B",
+        "Run bash scripts/run_autonomous_cycle.sh with AUTONOMOUS_AGENT_CLI configured",
+        "Configure and run one real AUTONOMOUS_AGENT_CLI backend through scripts/local_agent_runner.py"
+      ]
+    },
+    {
+      "id": "M14",
+      "title": "Container and devcontainer parity",
+      "status": "complete",
+      "dependencies": [
+        "M13B"
       ],
       "verify": [
         "docker build -t ai-customer-success .",
@@ -178,21 +194,56 @@
     {
       "id": "M15",
       "title": "Supabase schema and persistence hardening",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
-        "M14"
+        "M13B",
+        "M13C",
+        "M13D"
       ],
       "verify": [
         ".venv/bin/python scripts/check_supabase.py",
-        "Targeted persistence and admin tests"
+        ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M15",
+        ".venv/bin/python -m pytest tests/test_check_supabase.py tests/test_persistence.py tests/test_run_store.py tests/test_discovery_store.py tests/test_enrichment_runner.py tests/test_admin_api.py tests/test_mvp_pipeline.py tests/test_directory_dataset.py tests/test_vendor_review_dataset.py"
+      ]
+    },
+    {
+      "id": "M13C",
+      "title": "Tool registry and tool-access components",
+      "status": "complete",
+      "dependencies": [
+        "M13B"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13C",
+        ".venv/bin/python -m pytest tests/test_autonomous_audit.py tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+        "Review the tools/ and tools/supabase/ structure",
+        "Verify the tool registry schema and tool specs are present and readable",
+        "Verify README.md and autonomous docs explain the tool boundary, role access model, and usage model",
+        "Verify the tool contract stays aligned with supabase/core_persistence_schema.sql"
+      ]
+    },
+    {
+      "id": "M13D",
+      "title": "Supabase executable tool support",
+      "status": "complete",
+      "dependencies": [
+        "M13C"
+      ],
+      "verify": [
+        ".venv/bin/python scripts/autonomous_controller.py assert-artifacts M13D",
+        ".venv/bin/python -m pytest tests/test_supabase_tool.py tests/test_autonomous_audit.py",
+        "Review tools/supabase/cli.py and tools/supabase/tool_spec.json",
+        "Verify tool docs explain the direct execution boundary clearly"
       ]
     },
     {
       "id": "M16",
       "title": "End-to-end runtime hardening",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
-        "M15"
+        "M15",
+        "M13C",
+        "M13D"
       ],
       "verify": [
         ".venv/bin/python scripts/run_pipeline.py",
@@ -202,7 +253,7 @@
     {
       "id": "M17",
       "title": "Internal launch readiness",
-      "status": "not_started",
+      "status": "complete",
       "dependencies": [
         "M16"
       ],
@@ -210,6 +261,195 @@
         "Full milestone-close review",
         "Full test suite",
         "End-to-end runtime and operator walkthrough"
+      ]
+    },
+    {
+      "id": "M18",
+      "title": "Vendor intelligence schema expansion and deep enrichment",
+      "status": "in_progress",
+      "dependencies": [
+        "M17"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_llm_extractor.py tests/test_merge_results.py tests/test_site_explorer.py tests/test_vendor_profile_builder.py tests/test_supabase_client.py",
+        ".venv/bin/python scripts/check_supabase.py",
+        "Review supabase/core_persistence_schema.sql, services/extraction/vendor_intel.py, services/extraction/llm_extractor.py, services/enrichment/site_explorer.py, and the relevant export/admin surfaces",
+        "Verify the schema and docs clearly distinguish vendor value statements from structured case-study realized value",
+        "Verify the schema/processing rules normalize websites and emails into canonical valid formats before persistence"
+      ]
+    },
+    {
+      "id": "M19",
+      "title": "Role-based search visibility tracking and ranking intelligence",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        "Review the Supabase schema and the role-search result model for buyer_search_queries and buyer_search_results",
+        "Verify the implementation persists both Google-style and GEO-style queries per buyer role",
+        "Verify the implementation persists ranked result rows with vendor identity, query identity, channel, and score",
+        "Verify the reporting/export surface can show a role-based ranking table and a vendor visibility summary",
+        ".venv/bin/python -m pytest"
+      ]
+    },
+    {
+      "id": "M20",
+      "title": "Structured case-study intelligence",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_merge_results.py tests/test_supabase_client.py",
+        "Review the case-study schema and export shape for table-style rendering"
+      ]
+    },
+    {
+      "id": "M21",
+      "title": "Leadership, company, and contact intelligence",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_site_explorer.py tests/test_vendor_intel_extraction.py tests/test_supabase_client.py",
+        "Review the schema and extraction mapping for leadership/contact fields"
+      ]
+    },
+    {
+      "id": "M22",
+      "title": "Canonical identity and validation layer",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_apify_sources.py tests/test_vendor_profile_builder.py tests/test_supabase_client.py",
+        "Verify the schema/processing rules normalize websites and emails into canonical valid formats before persistence"
+      ]
+    },
+    {
+      "id": "M23",
+      "title": "Buyer persona search-intent engine",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_llm_extractor.py tests/test_merge_results.py",
+        "Review the buyer-role query generation contract and stored query shape"
+      ]
+    },
+    {
+      "id": "M24",
+      "title": "Lead magnet conversion surface",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        "Local preview review of public surfaces and CTA placement",
+        "Review the public product requirements against the lead-magnet objective"
+      ]
+    },
+    {
+      "id": "M25",
+      "title": "Editorial auto-inclusion governance",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_directory_relevance.py tests/test_admin_actions.py tests/test_vendor_profile_builder.py",
+        "Review the automated inclusion reasoning surfaced to operators"
+      ]
+    },
+    {
+      "id": "M26",
+      "title": "Multi-product vendor modeling",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_vendor_profile_builder.py tests/test_supabase_client.py",
+        "Review the multi-product schema and export/admin implications"
+      ]
+    },
+    {
+      "id": "M27",
+      "title": "Integration intelligence taxonomy",
+      "status": "not_started",
+      "dependencies": [
+        "M18"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_supabase_client.py",
+        "Review the integration taxonomy and normalized output shape"
+      ]
+    },
+    {
+      "id": "M28",
+      "title": "Render-level proof and UX verification",
+      "status": "not_started",
+      "dependencies": [
+        "M16",
+        "M24"
+      ],
+      "verify": [
+        "Browser-level verification of landing.html, vendor.html, and admin.html",
+        "Review stored proof artifacts for at least one milestone closeout"
+      ]
+    },
+    {
+      "id": "M29",
+      "title": "Evidence and proof artifact persistence",
+      "status": "not_started",
+      "dependencies": [
+        "M28"
+      ],
+      "verify": [
+        "Review proof bundle output structure and run-history linkage",
+        ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_milestone_auditor.py"
+      ]
+    },
+    {
+      "id": "M30",
+      "title": "External enrichment connectors",
+      "status": "not_started",
+      "dependencies": [
+        "M18",
+        "M13C"
+      ],
+      "verify": [
+        "Review tool specs, schema provenance fields, and external-enrichment guardrails",
+        ".venv/bin/python scripts/autonomous_audit.py"
+      ]
+    },
+    {
+      "id": "M31",
+      "title": "Knowledge-base and help-center detection",
+      "status": "not_started",
+      "dependencies": [
+        "M21"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_site_explorer.py tests/test_vendor_intel_extraction.py",
+        "Review help/support/docs URL extraction behavior"
+      ]
+    },
+    {
+      "id": "M32",
+      "title": "Solution enhancement workflow and agent",
+      "status": "not_started",
+      "dependencies": [
+        "M12",
+        "M13B"
+      ],
+      "verify": [
+        "Review the enhancement workflow docs and agent prompt",
+        ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py"
       ]
     }
   ]

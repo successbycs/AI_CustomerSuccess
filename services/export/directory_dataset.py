@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from services.persistence import supabase_client
-from services.extraction.vendor_intel import VendorIntelligence
+from services.extraction.vendor_intel import VendorIntelligence, normalize_icp_buyer_profiles
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -21,6 +21,7 @@ DIRECTORY_DATASET_FIELDS = (
     "mission",
     "usp",
     "icp",
+    "icp_buyer",
     "use_cases",
     "lifecycle_stages",
     "pricing",
@@ -42,9 +43,14 @@ def export_directory_dataset(
     output_path: Path | None = None,
     client: "Client | None" = None,
     fallback_profiles: list[VendorIntelligence] | None = None,
+    prefer_fallback_profiles: bool = False,
 ) -> list[dict[str, Any]]:
     """Fetch included vendors from Supabase and write a deterministic JSON dataset."""
-    dataset = build_directory_dataset(client=client, fallback_profiles=fallback_profiles)
+    dataset = build_directory_dataset(
+        client=client,
+        fallback_profiles=fallback_profiles,
+        prefer_fallback_profiles=prefer_fallback_profiles,
+    )
     output_path = output_path or DEFAULT_DIRECTORY_DATASET_PATH
     write_directory_dataset(dataset, output_path)
     return dataset
@@ -54,10 +60,13 @@ def build_directory_dataset(
     client: "Client | None" = None,
     *,
     fallback_profiles: list[VendorIntelligence] | None = None,
+    prefer_fallback_profiles: bool = False,
 ) -> list[dict[str, Any]]:
     """Return a clean public-directory dataset from persisted vendor rows."""
     rows: list[dict[str, Any]]
-    if client is not None or supabase_client.is_configured():
+    if prefer_fallback_profiles:
+        rows = []
+    elif client is not None or supabase_client.is_configured():
         try:
             rows = supabase_client.list_directory_vendors(client=client)
         except Exception:
@@ -83,6 +92,7 @@ def _normalize_vendor_row(row: dict[str, Any]) -> dict[str, Any]:
         "mission": _string_value(row.get("mission")),
         "usp": _string_value(row.get("usp")),
         "icp": _list_value(row.get("icp")),
+        "icp_buyer": normalize_icp_buyer_profiles(row.get("icp_buyer")),
         "use_cases": _list_value(row.get("use_cases")),
         "lifecycle_stages": _list_value(row.get("lifecycle_stages")),
         "pricing": _list_value(row.get("pricing")),
@@ -106,6 +116,7 @@ def _profile_to_vendor_row(profile: VendorIntelligence) -> dict[str, Any]:
         "mission": profile.mission,
         "usp": profile.usp,
         "icp": profile.icp,
+        "icp_buyer": profile.icp_buyer,
         "use_cases": profile.use_cases,
         "lifecycle_stages": profile.lifecycle_stages,
         "pricing": profile.pricing,

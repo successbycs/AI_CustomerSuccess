@@ -79,6 +79,10 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
                     '{"is_cs_relevant": true, "mission": "Reduce churn for customer success teams.", '
                     '"usp": "Predict churn before it happens.", '
                     '"icp": ["SaaS companies", "customer success teams"], '
+                    '"icp_buyer": [{"persona": "VP Customer Success", "confidence": "high", '
+                    '"evidence": ["reduce churn", "health scoring"], '
+                    '"google_queries": ["customer success software for reducing churn"], '
+                    '"geo_queries": ["What AI tools reduce churn for SaaS teams?"]}], '
                     '"use_cases": ["churn prediction", "renewal forecasting"], '
                     '"pricing": ["contact sales", "per seat"], '
                     '"free_trial": false, "soc2": true, "founded": "2022", '
@@ -112,6 +116,15 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
     assert result.mission == "Reduce churn for customer success teams."
     assert result.usp == "Predict churn before it happens."
     assert result.icp == ["SaaS companies", "customer success teams"]
+    assert result.icp_buyer == [
+        {
+            "persona": "VP Customer Success",
+            "confidence": "high",
+            "evidence": ["reduce churn", "health scoring"],
+            "google_queries": ["customer success software for reducing churn"],
+            "geo_queries": ["What AI tools reduce churn for SaaS teams?"],
+        }
+    ]
     assert result.use_cases == ["churn prediction", "renewal forecasting"]
     assert result.pricing == ["contact sales", "per seat"]
     assert result.free_trial is False
@@ -158,12 +171,16 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
                             {
                                 "type": "output_text",
                                 "text": (
-                                    '{"is_cs_relevant": true, "mission": "Improve adoption.", '
-                                    '"usp": "Lifecycle intelligence.", '
-                                    '"icp": ["customer success teams"], '
-                                    '"use_cases": ["onboarding"], "pricing": ["contact sales"], '
-                                    '"free_trial": null, "soc2": true, "founded": "2021", '
-                                    '"case_studies": [], "customers": [], "value_statements": [], '
+                                '{"is_cs_relevant": true, "mission": "Improve adoption.", '
+                                '"usp": "Lifecycle intelligence.", '
+                                '"icp": ["customer success teams"], '
+                                '"icp_buyer": [{"persona": "Head of Customer Success", "confidence": "medium", '
+                                '"evidence": ["improve adoption"], '
+                                '"google_queries": ["customer adoption software"], '
+                                '"geo_queries": ["What tools improve product adoption?"]}], '
+                                '"use_cases": ["onboarding"], "pricing": ["contact sales"], '
+                                '"free_trial": null, "soc2": true, "founded": "2021", '
+                                '"case_studies": [], "customers": [], "value_statements": [], '
                                     '"confidence": "medium"}'
                                 ),
                             }
@@ -177,6 +194,7 @@ def test_extract_vendor_intelligence_parses_nested_output_text(monkeypatch):
     assert result is not None
     assert result.mission == "Improve adoption."
     assert result.icp == ["customer success teams"]
+    assert result.icp_buyer[0]["persona"] == "Head of Customer Success"
     assert result.confidence == "medium"
 
 
@@ -217,6 +235,10 @@ def test_extract_vendor_intelligence_normalizes_list_fields(monkeypatch):
                 "output_text": (
                     '{"is_cs_relevant": true, "mission": "", "usp": "", '
                     '"icp": "SaaS companies|Mid-market", '
+                    '"icp_buyer": [{"persona": "VP Customer Success", "confidence": "high", '
+                    '"evidence": "reduce churn|renewals", '
+                    '"google_queries": "query 1|query 2|query 3|query 4|query 5|query 6", '
+                    '"geo_queries": ["prompt 1", "prompt 2"]}], '
                     '"use_cases": "onboarding,health scoring", '
                     '"pricing": ["contact sales", "annual pricing"], '
                     '"free_trial": null, "soc2": null, "founded": "", '
@@ -231,6 +253,15 @@ def test_extract_vendor_intelligence_normalizes_list_fields(monkeypatch):
 
     assert result is not None
     assert result.icp == ["SaaS companies", "Mid-market"]
+    assert result.icp_buyer == [
+        {
+            "persona": "VP Customer Success",
+            "confidence": "high",
+            "evidence": ["reduce churn", "renewals"],
+            "google_queries": ["query 1", "query 2", "query 3", "query 4", "query 5"],
+            "geo_queries": ["prompt 1", "prompt 2"],
+        }
+    ]
     assert result.use_cases == ["onboarding", "health scoring"]
     assert result.pricing == ["contact sales", "annual pricing"]
     assert result.case_studies == ["case study", "customer story"]

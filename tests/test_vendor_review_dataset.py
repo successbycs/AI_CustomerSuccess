@@ -17,6 +17,15 @@ def test_build_vendor_review_dataset_normalizes_and_sorts_rows(monkeypatch):
                 "website": "https://zeta.example.com",
                 "source": "google_search",
                 "mission": "Zeta helps teams reduce churn and improve adoption with AI guidance.",
+                "icp_buyer": [
+                    {
+                        "persona": "VP Customer Success",
+                        "confidence": "high",
+                        "evidence": ["reduce churn"],
+                        "google_queries": ["customer success software for reducing churn"],
+                        "geo_queries": ["What AI tools reduce churn for SaaS teams?"],
+                    }
+                ],
                 "use_cases": ["health scoring", "renewal management"],
                 "pricing": "contact sales|per seat",
                 "lifecycle_stages": ["Adopt", "Renew"],
@@ -54,6 +63,7 @@ def test_build_vendor_review_dataset_normalizes_and_sorts_rows(monkeypatch):
     dataset = vendor_review_dataset.build_vendor_review_dataset()
 
     assert [item["vendor_name"] for item in dataset] == ["Alpha", "Zeta"]
+    assert dataset[1]["icp_buyer_summary"] == "VP Customer Success"
     assert dataset[1]["pricing_summary"] == "contact sales, per seat"
     assert dataset[1]["evidence_url_count"] == 2
     assert dataset[0]["include_in_directory"] is False
@@ -68,6 +78,15 @@ def test_build_vendor_review_dataset_falls_back_to_current_profiles_when_supabas
                 vendor_name="Bravo",
                 website="https://bravo.example.com",
                 mission="Renewal automation for SaaS teams",
+                icp_buyer=[
+                    {
+                        "persona": "VP Customer Success",
+                        "confidence": "high",
+                        "evidence": ["renewal automation"],
+                        "google_queries": ["renewal management software"],
+                        "geo_queries": ["Which tools improve SaaS renewals?"],
+                    }
+                ],
                 use_cases=["renewal management", "churn prevention"],
                 pricing=["contact sales"],
                 lifecycle_stages=["Renew"],
@@ -89,6 +108,16 @@ def test_build_vendor_review_dataset_falls_back_to_current_profiles_when_supabas
             "website": "https://bravo.example.com",
             "source": "",
             "mission_summary": "Renewal automation for SaaS teams",
+            "icp_buyer": [
+                {
+                    "persona": "VP Customer Success",
+                    "confidence": "high",
+                    "evidence": ["renewal automation"],
+                    "google_queries": ["renewal management software"],
+                    "geo_queries": ["Which tools improve SaaS renewals?"],
+                }
+            ],
+            "icp_buyer_summary": "VP Customer Success",
             "use_case_summary": "renewal management, churn prevention",
             "pricing_summary": "contact sales",
             "lifecycle_stages": ["Renew"],
@@ -109,7 +138,7 @@ def test_export_vendor_review_artifacts_writes_json_and_html(monkeypatch, tmp_pa
     monkeypatch.setattr(
         vendor_review_dataset,
         "build_vendor_review_dataset",
-        lambda client=None, fallback_profiles=None: [
+        lambda client=None, fallback_profiles=None, prefer_fallback_profiles=False: [
             {
                 "vendor_name": "Alpha",
                 "website": "https://alpha.example.com",
@@ -145,3 +174,27 @@ def test_export_vendor_review_artifacts_writes_json_and_html(monkeypatch, tmp_pa
     html = html_path.read_text(encoding="utf-8")
     assert "Vendor review report" in html
     assert "Alpha" in html
+
+
+def test_build_vendor_review_dataset_prefers_fallback_profiles_when_requested(monkeypatch):
+    monkeypatch.setattr(vendor_review_dataset.supabase_client, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        vendor_review_dataset.supabase_client,
+        "list_vendor_profiles",
+        lambda limit=500, client=None: (_ for _ in ()).throw(RuntimeError("supabase unavailable")),
+    )
+
+    dataset = vendor_review_dataset.build_vendor_review_dataset(
+        fallback_profiles=[
+            VendorIntelligence(
+                vendor_name="Fallback",
+                website="https://fallback.example.com",
+                mission="Fallback mission",
+                include_in_directory=True,
+                confidence="high",
+            )
+        ],
+        prefer_fallback_profiles=True,
+    )
+
+    assert dataset[0]["vendor_name"] == "Fallback"

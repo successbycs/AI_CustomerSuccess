@@ -11,11 +11,11 @@ Level 1 deterministic extraction and Level 2 LLM-assisted extraction.
 
 Current implementation status:
 the codebase at this checkpoint runs Level 1 deterministic extraction as the baseline
-and Level 2 LLM-assisted extraction as an active optional enrichment layer.
-If Level 2 is unavailable, the MVP pipeline falls back to Level 1 without failing the run.
+and Level 2 LLM-assisted extraction as the default enrichment path for normal runs.
+If Level 2 is unavailable, the MVP pipeline falls back to Level 1 without failing the run, and that fallback must be visible to operators.
 
 Current repo snapshot:
-- discovery, enrichment, deterministic extraction, optional LLM enrichment, directory scoring, and export artifacts are implemented
+- discovery, enrichment, deterministic extraction, LLM-default enrichment, directory scoring, and export artifacts are implemented
 - public directory pages and admin pages are implemented as static pages backed by exported JSON and admin API endpoints
 - run tracking and scheduler entrypoints exist
 - documentation, config consolidation, schema hardening, and launch-readiness verification are still active milestones
@@ -667,27 +667,11 @@ Multiple stages may apply.
 
 Supabase is the canonical datastore.
 
-Table: cs_vendors
+The repo-owned core persistence schema now lives in:
 
-CREATE TABLE cs_vendors (
- id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- name TEXT NOT NULL,
- website TEXT UNIQUE NOT NULL,
- source TEXT,
- mission TEXT,
- usp TEXT,
- pricing TEXT,
- free_trial BOOLEAN,
- soc2 BOOLEAN,
- founded TEXT,
- use_cases TEXT[],
- lifecycle_stages TEXT[],
- raw_description TEXT,
- confidence TEXT,
- first_seen DATE DEFAULT CURRENT_DATE,
- last_updated TIMESTAMPTZ DEFAULT NOW(),
- is_new BOOLEAN DEFAULT TRUE
-);
+`supabase/core_persistence_schema.sql`
+
+That SQL file is the canonical reference for the required `cs_vendors`, `discovery_candidates`, and `pipeline_runs` tables used by the live pipeline, exports, and operator views.
 
 Upserts use:
 

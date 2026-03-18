@@ -18,6 +18,15 @@ def test_build_directory_dataset_normalizes_and_sorts_rows(monkeypatch):
                 "mission": None,
                 "usp": "Reduce churn",
                 "icp": "SaaS companies|Mid-market",
+                "icp_buyer": [
+                    {
+                        "persona": "VP Customer Success",
+                        "confidence": "high",
+                        "evidence": ["reduce churn"],
+                        "google_queries": ["customer success software for reducing churn"],
+                        "geo_queries": ["What AI tools reduce churn for SaaS teams?"],
+                    }
+                ],
                 "use_cases": ["renewal management"],
                 "lifecycle_stages": ["Renew"],
                 "pricing": "contact sales|per seat",
@@ -58,6 +67,7 @@ def test_build_directory_dataset_normalizes_and_sorts_rows(monkeypatch):
     dataset = directory_dataset.build_directory_dataset()
 
     assert [item["vendor_name"] for item in dataset] == ["Alpha", "Zeta"]
+    assert dataset[1]["icp_buyer"][0]["persona"] == "VP Customer Success"
     assert dataset[1]["pricing"] == ["contact sales", "per seat"]
     assert dataset[1]["customers"] == ["Acme", "Beta"]
     assert dataset[1]["free_trial"] is False
@@ -67,7 +77,9 @@ def test_export_directory_dataset_writes_json_file(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         directory_dataset,
         "build_directory_dataset",
-        lambda client=None, fallback_profiles=None: [{"vendor_name": "Alpha", "website": "https://alpha.example.com"}],
+        lambda client=None, fallback_profiles=None, prefer_fallback_profiles=False: [
+            {"vendor_name": "Alpha", "website": "https://alpha.example.com"}
+        ],
     )
 
     output_path = tmp_path / "directory_dataset.json"
@@ -86,6 +98,15 @@ def test_build_directory_dataset_falls_back_to_current_profiles_when_supabase_is
                 vendor_name="Bravo",
                 website="https://bravo.example.com",
                 mission="Renewal automation",
+                icp_buyer=[
+                    {
+                        "persona": "VP Customer Success",
+                        "confidence": "high",
+                        "evidence": ["renewal automation"],
+                        "google_queries": ["renewal management software"],
+                        "geo_queries": ["Which tools improve SaaS renewals?"],
+                    }
+                ],
                 include_in_directory=True,
                 directory_fit="high",
                 directory_category="cs_core",
@@ -100,6 +121,15 @@ def test_build_directory_dataset_falls_back_to_current_profiles_when_supabase_is
             "mission": "Renewal automation",
             "usp": "",
             "icp": [],
+            "icp_buyer": [
+                {
+                    "persona": "VP Customer Success",
+                    "confidence": "high",
+                    "evidence": ["renewal automation"],
+                    "google_queries": ["renewal management software"],
+                    "geo_queries": ["Which tools improve SaaS renewals?"],
+                }
+            ],
             "use_cases": [],
             "lifecycle_stages": [],
             "pricing": [],
@@ -115,3 +145,28 @@ def test_build_directory_dataset_falls_back_to_current_profiles_when_supabase_is
             "directory_category": "cs_core",
         }
     ]
+
+
+def test_build_directory_dataset_prefers_fallback_profiles_when_requested(monkeypatch):
+    monkeypatch.setattr(directory_dataset.supabase_client, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        directory_dataset.supabase_client,
+        "list_directory_vendors",
+        lambda client=None: (_ for _ in ()).throw(RuntimeError("supabase unavailable")),
+    )
+
+    dataset = directory_dataset.build_directory_dataset(
+        fallback_profiles=[
+            VendorIntelligence(
+                vendor_name="Fallback",
+                website="https://fallback.example.com",
+                mission="Fallback mission",
+                include_in_directory=True,
+                directory_fit="high",
+                directory_category="cs_core",
+            )
+        ],
+        prefer_fallback_profiles=True,
+    )
+
+    assert dataset[0]["vendor_name"] == "Fallback"

@@ -22,6 +22,10 @@ Responsibilities:
 - name the code, docs, config, and tests likely to be touched
 - define the verification commands and runtime/manual checks required to close the milestone
 - identify any missing tests that should be created during the builder step
+- identify which declared tools from `tools/` are relevant to the milestone
+- state whether the milestone needs direct repo-owned tool access and which tool operations are required
+- recommend a capability milestone when a reusable missing tool or execution path is blocking the current milestone
+- identify whether the delegated builder task needs a bounded write scope and whether parallel work would be unsafe
 
 Return:
 
@@ -29,6 +33,7 @@ Return:
 - scope summary
 - dependencies and blockers
 - files likely to change
+- tools likely to be used
 - tests to add or update
 - verification plan
 - risks that must be watched during implementation

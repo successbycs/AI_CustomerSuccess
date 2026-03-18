@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-03-17T10:56:30.275170+00:00",
+  "role": "qa",
+  "prompt_path": "/home/chris/projects/AI_CustomerSuccess/docs/agents/qa_agent.md",
+  "milestone": {
+    "id": "M08",
+    "title": "Public directory experience",
+    "status": "not_started",
+    "dependencies": [
+      "M07"
+    ],
+    "verify": [
+      ".venv/bin/python -m pytest tests/test_directory_dataset.py",
+      "Local preview check of landing.html and vendor.html"
+    ],
+    "section_text": "## M08 Public directory experience\nStatus: `not_started`\n\nObjective:\nRender a static listing page and vendor profile page from exported data.\n\nAcceptance criteria:\n- Listing page renders real dataset rows\n- Vendor detail page resolves a vendor from the exported dataset\n- Filter and browse behavior works without a frontend framework\n\nVerification:\n- `.venv/bin/python -m pytest tests/test_directory_dataset.py`\n- Local preview check of `landing.html` and `vendor.html`"
+  },
+  "current_focus": "M08",
+  "context_files": [
+    "docs/product_design.md",
+    "docs/architecture.md",
+    "docs/codex_guardrails.md",
+    "docs/implementation_plan.md",
+    "changed files",
+    "relevant tests and runtime commands"
+  ],
+  "changed_files": [],
+  "artifact_checks": [],
+  "checklist": [
+    "Check milestone verification results",
+    "Check artifact existence and runtime/manual checks",
+    "State whether manual checks are still pending",
+    "Record pass/fail with a concrete note"
+  ],
+  "runner_mode": "repo_native_local_packet",
+  "notes": "This runner generates structured local packets and can optionally invoke a local AI CLI.",
+  "result": {
+    "status": "packet_only",
+    "summary": "No local AI CLI was configured for the qa role. A structured packet was generated for M08 instead.",
+    "issues": [
+      "A human operator or configured local AI CLI must complete this role step."
+    ],
+    "manual_checks_required": true
+  }
+}

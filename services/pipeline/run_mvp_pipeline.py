@@ -20,7 +20,8 @@ def run_mvp_pipeline(query: str | list[str] | None = None) -> list[dict[str, str
     upsert_vendor_result_fn = None
 
     if supabase_client.is_configured():
-        vendor_exists_fn = supabase_client.vendor_exists
+        if supabase_client.supports_export_ready_vendor_profiles():
+            vendor_exists_fn = supabase_client.vendor_exists
         upsert_vendor_result_fn = supabase_client.upsert_vendor_result
 
     return orchestrator.run_mvp_pipeline(

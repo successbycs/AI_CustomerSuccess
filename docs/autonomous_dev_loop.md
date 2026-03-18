@@ -24,7 +24,7 @@ Use the milestone list in `docs/implementation_plan.md`.
 2. Otherwise, select the lowest-numbered `not_started` milestone.
 3. Do not skip ahead unless a human explicitly redirects the work.
 
-## Five-Role Execution Pattern
+## Core Five-Role Execution Pattern
 
 ### 1. Controller
 
@@ -37,6 +37,12 @@ Controller responsibilities:
 - invoke the local cycle wrapper and verification commands
 - record milestone transitions and run history
 - treat prompt docs as execution inputs for a local runner, not as implicit automation
+- classify failed verification results as actionable-internal vs external-blocker
+- retry the same milestone when the failure is actionable and still inside the retry budget
+- create one minimal capability milestone when a reusable missing execution capability is blocking the current milestone
+- update both `docs/implementation_plan.md` and `milestone_registry.json` when a new capability milestone is required
+- resume the blocked parent milestone after the capability milestone is complete
+- expose declared `tools/` capabilities to roles through controller-owned packets and access rules
 
 ### 2. Planner
 
@@ -48,6 +54,8 @@ Planner responsibilities:
 - identify likely changed files, tests, and verification commands
 - call out blockers, dependencies, and proof requirements
 - keep the builder from drifting into adjacent milestones
+- identify whether the milestone requires declared tools from `tools/`
+- use repo-owned direct tooling when a milestone needs tool access
 
 ### 3. Builder
 
@@ -84,6 +92,32 @@ QA responsibilities:
 - check runtime behavior and output artifacts
 - confirm tests cover the milestone adequately
 - explicitly mark pass/fail for milestone completion
+
+## Post-Completion Auditors
+
+The audit roles run after milestone completion or retrospectively across older milestones.
+
+### Closeout Auditor
+
+The closeout auditor runs immediately after the controller marks a milestone complete.
+
+Responsibilities:
+
+- inspect the completed milestone against its latest implementation and proof
+- record residual risks, weak proof, accepted caveats, and overstatements
+- append a milestone-specific audit entry to `docs/audit/audit.md`
+- avoid reopening the milestone by default unless a human explicitly chooses to act on the audit
+
+### Backfill Auditor
+
+The backfill auditor is used for older completed milestones that do not yet have an audit entry.
+
+Responsibilities:
+
+- assess whether the historical completion claim is still defensible
+- capture stale or missing proof honestly
+- append a retrospective audit entry to `docs/audit/audit.md`
+- normalize the audit log without silently changing milestone status
 
 ## Standard Builder Prompt
 
@@ -180,22 +214,82 @@ The repo includes a local execution bootstrap for the control plane:
 - `scripts/run_autonomous_cycle.sh`
 - `scripts/verify_project.sh`
 - `scripts/local_agent_runner.py`
+- `scripts/openai_agent_cli.py`
 
 Execution model:
 
 - `scripts/autonomous_controller.py` manages local milestone state and verification history
+- `scripts/autonomous_controller.py auto-iterate` is the controller-owned bounded inner loop for same-milestone retries
 - `scripts/run_autonomous_cycle.sh` chains the local controller checks via subprocess
 - if `AUTONOMOUS_AGENT_RUNNER` is configured, `scripts/run_autonomous_cycle.sh` will invoke that local executable for `planner -> builder -> reviewer -> QA`
 - if `AUTONOMOUS_AGENT_RUNNER` is not configured, `scripts/local_agent_runner.py` generates structured local role packets for `planner -> builder -> reviewer -> QA`
+- `M13B` is the milestone that tracks real local AI backend integration for `AUTONOMOUS_AGENT_CLI`
+- `scripts/openai_agent_cli.py` is the repo-native OpenAI adapter for `AUTONOMOUS_AGENT_CLI`
+- `M13C` is the milestone that defines the reusable `tools/` registry pattern, role-based tool access, and the first `tools/supabase/` capability
+- role packets should carry a delegated task contract with task ownership, read/write mode, bounded write scope, and allowed tool ids
 - reviewer and QA outcomes should be recorded through `scripts/autonomous_controller.py review ...` and `scripts/autonomous_controller.py qa ...`
+- `scripts/milestone_auditor.py` runs the closeout and backfill auditors against the repo state
+- `scripts/autonomous_controller.py complete ...` triggers the closeout auditor automatically after completion
+- `scripts/autonomous_controller.py audit-backfill ...` is the manual path for filling audit gaps across older completed milestones
+- `scripts/autonomous_controller.py assert-artifacts` checks milestone-aware artifact assertions directly from the controller
+- `scripts/prove_container_autonomous_loop.sh` is the repo-native Docker proof entrypoint for the controller loop
 
 ## Post-QA Decision Rule
 
 After the QA step:
 
 - if verification, review, and QA have all passed, the controller may mark the milestone `complete`
+- after completion, the controller should trigger the `Closeout Auditor`
 - if QA identifies fixable gaps, the milestone remains `in_progress` and loops back through builder -> reviewer -> QA
 - if QA identifies an unresolved blocker, the controller should mark the milestone `blocked` and stop for human review
+
+## Post-Verify Retry Rule
+
+After the verify step:
+
+- if verification fails and the failure is actionable within the current milestone, the controller should keep the milestone `in_progress` and route the latest failure evidence back into planner -> builder for the same milestone
+- if verification fails because of an external dependency, missing credentials, missing infrastructure, or required manual validation, the controller should stop retrying and surface an explicit blocker
+- datastore schema-admin milestones must run a capability preflight before deeper verification; if no DB-admin path is configured, the controller should fail fast and mark the issue as an external blocker rather than spinning on downstream symptoms
+- same-milestone retries must be bounded by `project_state.json` controller policy rather than looping indefinitely
+- review and QA must not silently override a failed verification result
+- delegated mutating roles must not run without a declared write scope
+- parallel delegated work should remain opt-in and read-only unless file ownership is explicit and non-overlapping
+
+## Capability-Milestone Rule
+
+When the current milestone is blocked by a missing reusable capability that is outside its proper scope:
+
+- create exactly one new capability milestone rather than burying the work inside the blocked milestone
+- keep that capability milestone minimal, reusable, and clearly dependency-linked
+- add it to both `docs/implementation_plan.md` and `milestone_registry.json`
+- complete the capability milestone first
+- then resume the blocked parent milestone
+- do not create ad hoc milestones for one-off implementation details
+
+## Tool Registry Rule
+
+The repo tool model should follow these rules:
+
+- `tools/` defines reusable repo-owned tools and their specs
+- agents may use tools declared in the tool registry when the controller exposes them for the current milestone and role
+- tool access rules must define which roles may read, verify, or write through each tool
+- direct repo-owned access is preferred
+- SQL and schema files remain the source of truth when direct tool execution is used
+
+## QA Best-Practice Behaviors
+
+The autonomous system should include these QA-oriented behaviors:
+
+- bounded retries with a configured retry limit per milestone
+- explicit external-blocker classification for schema drift, missing credentials, network issues, permissions, and missing infrastructure
+- deterministic evidence capture for every verify/review/QA step, including failure summaries and artifact assertion results
+- stale-artifact awareness so old outputs are not mistaken for fresh milestone proof
+- dependency re-checks before milestone completion so blocked prerequisites do not get skipped silently
+- no silent fallback: fallback behavior must be logged and visible to the operator
+- changed-file scope checks so a milestone retry does not drift into unrelated areas
+- manual-check gating so runtime/UI/operator checks cannot be skipped by a passing test suite alone
+- retry handoff context in planner packets so the planner sees the latest failed verification evidence rather than starting from a blank context
+- clear stop conditions for destructive actions, product-scope changes, and external system changes that the repo cannot fix by itself
 
 ## Standard Reviewer Prompt
 
