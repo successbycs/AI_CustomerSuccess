@@ -106,3 +106,65 @@ def test_build_vendor_profile_excludes_article_like_or_support_subdomain_vendors
     assert result.directory_fit == "low"
     assert result.directory_category == "infra"
     assert result.include_in_directory is False
+
+
+def test_build_vendor_profile_preserves_m18_rich_fields():
+    vendor = {
+        "vendor_name": "ExampleCorp",
+        "website": "https://example.com",
+        "source": "google_search",
+    }
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "ExampleCorp",
+            "website": "https://example.com",
+            "text": "Homepage text",
+        }
+    }
+    intelligence = VendorIntelligence(
+        vendor_name="ExampleCorp",
+        website="https://example.com",
+        products=[
+            {
+                "name": "Journey Hub",
+                "category": "platform",
+                "description": "Guided onboarding",
+                "source_url": "https://example.com/products/journey-hub",
+            }
+        ],
+        leadership=[
+            {
+                "name": "Jane Doe",
+                "title": "CEO",
+                "source_url": "https://example.com/team",
+            }
+        ],
+        contact_email="sales@example.com",
+        contact_page_url="https://example.com/contact",
+        demo_url="https://example.com/demo",
+        help_center_url="https://example.com/help",
+        support_url="https://example.com/support",
+        company_hq="Austin, Texas",
+        integration_categories=["crm"],
+        integrations=["Salesforce"],
+        support_signals=["help center"],
+        case_study_details=[
+            {
+                "client": "Acme",
+                "title": "Acme case study",
+                "use_case": "onboarding",
+                "value_realized": "reduced churn by 20%",
+                "source_url": "https://example.com/customers/acme",
+            }
+        ],
+        confidence="medium",
+    )
+
+    result = build_vendor_profile(vendor, explored_pages, intelligence)
+
+    assert result.products == intelligence.products
+    assert result.leadership == intelligence.leadership
+    assert result.contact_email == "sales@example.com"
+    assert result.help_center_url == "https://example.com/help"
+    assert result.integration_categories == ["crm"]
+    assert result.case_study_details == intelligence.case_study_details

@@ -18,6 +18,7 @@ This is a planning task, not a build task.
 Responsibilities:
 
 - confirm the exact acceptance criteria for the selected milestone
+- incorporate the prework role output before finalizing scope, blockers, files, tests, and verification
 - identify dependencies, blockers, and proof requirements
 - name the code, docs, config, and tests likely to be touched
 - define the verification commands and runtime/manual checks required to close the milestone

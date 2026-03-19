@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import json
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 CANONICAL_LIFECYCLE_STAGES = [
     "Sign",
@@ -190,6 +191,37 @@ CASE_STUDY_RULES = [
     (["customer story", "customer stories"], "customer story"),
 ]
 
+INTEGRATION_CATEGORY_RULES = [
+    (["salesforce", "hubspot"], "crm"),
+    (["slack", "microsoft teams", "teams"], "communication"),
+    (["zendesk", "intercom", "freshdesk"], "support"),
+    (["segment", "snowflake", "bigquery"], "data"),
+    (["jira", "asana"], "project management"),
+]
+
+KNOWN_INTEGRATIONS = [
+    "Asana",
+    "BigQuery",
+    "Freshdesk",
+    "HubSpot",
+    "Intercom",
+    "Jira",
+    "Microsoft Teams",
+    "Salesforce",
+    "Segment",
+    "Slack",
+    "Snowflake",
+    "Zendesk",
+]
+
+SUPPORT_SIGNAL_RULES = [
+    (["help center", "help centre", "help-center"], "help center"),
+    (["knowledge base", "knowledge-base"], "knowledge base"),
+    (["support portal", "support center", "support-centre"], "support portal"),
+    (["community forum", "community support"], "community"),
+    (["academy", "training"], "training"),
+]
+
 CUSTOMER_PATTERNS = [
     r"trusted by ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
     r"customers include ([A-Z][A-Za-z0-9&.-]+(?:,\s*[A-Z][A-Za-z0-9&.-]+){0,4})",
@@ -236,7 +268,21 @@ class VendorIntelligence:
     free_trial: bool | None = None
     soc2: bool | None = None
     founded: str = ""
+    products: list[dict[str, Any]] = field(default_factory=list)
+    leadership: list[dict[str, Any]] = field(default_factory=list)
+    company_hq: str = ""
+    contact_email: str = ""
+    contact_page_url: str = ""
+    demo_url: str = ""
+    help_center_url: str = ""
+    support_url: str = ""
+    about_url: str = ""
+    team_url: str = ""
+    integration_categories: list[str] = field(default_factory=list)
+    integrations: list[str] = field(default_factory=list)
+    support_signals: list[str] = field(default_factory=list)
     case_studies: list[str] = field(default_factory=list)
+    case_study_details: list[dict[str, Any]] = field(default_factory=list)
     customers: list[str] = field(default_factory=list)
     value_statements: list[str] = field(default_factory=list)
     confidence: str = ""
@@ -247,7 +293,22 @@ class VendorIntelligence:
 
     def __post_init__(self) -> None:
         """Normalize structured buyer-persona enrichment into a stable list-of-dicts shape."""
+        self.website = normalize_website_url(self.website)
         self.icp_buyer = normalize_icp_buyer_profiles(self.icp_buyer)
+        self.products = normalize_product_profiles(self.products)
+        self.leadership = normalize_leadership_profiles(self.leadership)
+        self.contact_email = normalize_email_address(self.contact_email)
+        self.contact_page_url = normalize_website_url(self.contact_page_url)
+        self.demo_url = normalize_website_url(self.demo_url)
+        self.help_center_url = normalize_website_url(self.help_center_url)
+        self.support_url = normalize_website_url(self.support_url)
+        self.about_url = normalize_website_url(self.about_url)
+        self.team_url = normalize_website_url(self.team_url)
+        self.integration_categories = _normalize_string_list(self.integration_categories)
+        self.integrations = _normalize_string_list(self.integrations)
+        self.support_signals = _normalize_string_list(self.support_signals)
+        self.case_study_details = normalize_case_study_details(self.case_study_details)
+        self.evidence_urls = [url for url in (normalize_website_url(url) for url in self.evidence_urls) if url]
 
     def validate(self) -> None:
         """Validate the schema structure and types.
@@ -267,6 +328,14 @@ class VendorIntelligence:
             "confidence",
             "directory_fit",
             "directory_category",
+            "company_hq",
+            "contact_email",
+            "contact_page_url",
+            "demo_url",
+            "help_center_url",
+            "support_url",
+            "about_url",
+            "team_url",
         ]:
             value = getattr(self, field_name)
             if not isinstance(value, str):
@@ -277,6 +346,9 @@ class VendorIntelligence:
             "use_cases",
             "lifecycle_stages",
             "pricing",
+            "integration_categories",
+            "integrations",
+            "support_signals",
             "case_studies",
             "customers",
             "value_statements",
@@ -292,6 +364,18 @@ class VendorIntelligence:
             raise TypeError("icp_buyer must be a list")
         if not all(isinstance(item, dict) for item in self.icp_buyer):
             raise TypeError("All items in icp_buyer must be objects")
+        if not isinstance(self.products, list):
+            raise TypeError("products must be a list")
+        if not all(isinstance(item, dict) for item in self.products):
+            raise TypeError("All items in products must be objects")
+        if not isinstance(self.leadership, list):
+            raise TypeError("leadership must be a list")
+        if not all(isinstance(item, dict) for item in self.leadership):
+            raise TypeError("All items in leadership must be objects")
+        if not isinstance(self.case_study_details, list):
+            raise TypeError("case_study_details must be a list")
+        if not all(isinstance(item, dict) for item in self.case_study_details):
+            raise TypeError("All items in case_study_details must be objects")
 
         for field_name in ["free_trial", "soc2", "include_in_directory"]:
             value = getattr(self, field_name)
@@ -357,11 +441,177 @@ def normalize_icp_buyer_profiles(value: object) -> list[dict[str, Any]]:
     return normalized
 
 
+def normalize_product_profiles(value: object) -> list[dict[str, Any]]:
+    """Return normalized structured product metadata."""
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return []
+        return normalize_product_profiles(parsed)
+
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for raw_item in value:
+        if isinstance(raw_item, str):
+            raw_item = {"name": raw_item}
+        if not isinstance(raw_item, dict):
+            continue
+
+        name = str(raw_item.get("name") or "").strip()
+        if not name:
+            continue
+
+        key = name.lower()
+        if key in seen_keys:
+            continue
+
+        normalized.append(
+            {
+                "name": name,
+                "category": str(raw_item.get("category") or "").strip(),
+                "description": str(raw_item.get("description") or "").strip(),
+                "source_url": normalize_website_url(raw_item.get("source_url")),
+            }
+        )
+        seen_keys.add(key)
+    return normalized
+
+
+def normalize_leadership_profiles(value: object) -> list[dict[str, Any]]:
+    """Return normalized structured leadership metadata."""
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return []
+        return normalize_leadership_profiles(parsed)
+
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for raw_item in value:
+        if not isinstance(raw_item, dict):
+            continue
+
+        name = str(raw_item.get("name") or "").strip()
+        title = str(raw_item.get("title") or "").strip()
+        if not name:
+            continue
+
+        key = (name.lower(), title.lower())
+        if key in seen_keys:
+            continue
+
+        normalized.append(
+            {
+                "name": name,
+                "title": title,
+                "source_url": normalize_website_url(raw_item.get("source_url")),
+            }
+        )
+        seen_keys.add(key)
+    return normalized
+
+
+def normalize_case_study_details(value: object) -> list[dict[str, Any]]:
+    """Return normalized structured case-study metadata."""
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return []
+        return normalize_case_study_details(parsed)
+
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str, str]] = set()
+    for raw_item in value:
+        if not isinstance(raw_item, dict):
+            continue
+
+        client = str(raw_item.get("client") or "").strip()
+        title = str(raw_item.get("title") or "").strip()
+        use_case = str(raw_item.get("use_case") or "").strip()
+        value_realized = str(raw_item.get("value_realized") or "").strip()
+        if not any((client, title, use_case, value_realized)):
+            continue
+
+        key = (client.lower(), title.lower(), value_realized.lower())
+        if key in seen_keys:
+            continue
+
+        normalized.append(
+            {
+                "client": client,
+                "title": title,
+                "use_case": use_case,
+                "value_realized": value_realized,
+                "source_url": normalize_website_url(raw_item.get("source_url")),
+            }
+        )
+        seen_keys.add(key)
+    return normalized
+
+
 def summarize_icp_buyer_profiles(profiles: list[dict[str, Any]]) -> str:
     """Return a readable summary of buyer personas for flat review surfaces."""
     personas = [str(item.get("persona") or "").strip() for item in profiles if isinstance(item, dict)]
     personas = [persona for persona in personas if persona]
     return ", ".join(personas)
+
+
+def normalize_website_url(value: object) -> str:
+    """Return a canonical website URL suitable for persistence."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    if "://" not in text and re.match(r"^[a-z0-9.-]+\.[a-z]{2,}(/.*)?$", text, flags=re.IGNORECASE):
+        text = f"https://{text}"
+
+    parsed = urlparse(text)
+    if not parsed.netloc:
+        return ""
+
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+
+    path = parsed.path or ""
+    if path != "/" and path.endswith("/"):
+        path = path[:-1]
+    if path == "/":
+        path = ""
+
+    scheme = parsed.scheme.lower() or "https"
+    return f"{scheme}://{domain}{path}"
+
+
+def normalize_email_address(value: object) -> str:
+    """Return a canonical email address suitable for persistence."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    if not re.fullmatch(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", text):
+        return ""
+    return text
 
 
 def _normalize_query_list(value: object) -> list[str]:
@@ -411,23 +661,39 @@ def extract_vendor_intelligence(
     combined_text_lower = combined_text.lower()
     relevance_text = _combine_relevance_texts(page_payloads).lower()
     pricing_text = _page_text(page_payloads, "pricing_page").lower()
-    case_studies_text = _page_text(page_payloads, "case_studies_page").lower()
+    case_studies_text = _page_text(page_payloads, "case_studies_page")
+    case_studies_text_lower = case_studies_text.lower()
+    product_text = _page_text(page_payloads, "product_page")
+    about_text = _page_text(page_payloads, "about_page")
+    team_text = _page_text(page_payloads, "team_page")
+    contact_text = _page_text(page_payloads, "contact_page")
+    demo_text = _page_text(page_payloads, "demo_page")
+    help_text = _page_text(page_payloads, "help_page")
+    support_text = _page_text(page_payloads, "support_page")
+    integrations_text = _page_text(page_payloads, "integrations_page")
     security_text = _page_text(page_payloads, "security_page").lower()
     all_evidence_urls = _collect_page_urls(page_payloads)
+    canonical_website = normalize_website_url(
+        homepage_payload.get("website") or homepage_payload.get("url") or ""
+    )
 
     icp = _extract_icp(combined_text_lower)
     use_cases = _extract_use_cases(combined_text_lower)
     lifecycle_stages = _extract_lifecycle_stages(combined_text_lower)
     value_statements = _extract_value_statements(combined_text_lower)
-    case_studies = _extract_case_studies(case_studies_text or combined_text_lower)
+    case_studies = _extract_case_studies(case_studies_text_lower or combined_text_lower)
     customers = _extract_customers(combined_text)
     pricing = _extract_pricing(pricing_text or combined_text_lower)
+    case_study_details = _extract_case_study_details(
+        case_studies_text or "",
+        source_url=_page_url(page_payloads, "case_studies_page"),
+    )
     free_trial = _detect_boolean_signal(combined_text_lower, ["free trial", "start free", "try free"])
     soc2 = _detect_boolean_signal(security_text or combined_text_lower, ["soc 2", "soc2", "iso 27001", "iso27001"])
 
     return VendorIntelligence(
         vendor_name=str(homepage_payload.get("vendor_name", "")),
-        website=str(homepage_payload.get("website") or homepage_payload.get("url") or ""),
+        website=canonical_website,
         source=str(homepage_payload.get("source", "")),
         mission=_extract_mission(homepage_text or combined_text),
         usp=_extract_usp(value_statements, combined_text),
@@ -438,7 +704,29 @@ def extract_vendor_intelligence(
         free_trial=free_trial,
         soc2=soc2,
         founded=_extract_founded(combined_text),
+        products=_extract_products(
+            product_text or homepage_text,
+            source_url=_page_url(page_payloads, "product_page") or canonical_website,
+        ),
+        leadership=_extract_leadership(
+            f"{about_text} {team_text}".strip(),
+            source_url=_page_url(page_payloads, "team_page") or _page_url(page_payloads, "about_page"),
+        ),
+        company_hq=_extract_company_hq(f"{about_text} {contact_text}".strip()),
+        contact_email=_extract_contact_email(contact_text or combined_text),
+        contact_page_url=_page_url(page_payloads, "contact_page"),
+        demo_url=_page_url(page_payloads, "demo_page"),
+        help_center_url=_page_url(page_payloads, "help_page"),
+        support_url=_page_url(page_payloads, "support_page"),
+        about_url=_page_url(page_payloads, "about_page"),
+        team_url=_page_url(page_payloads, "team_page"),
+        integration_categories=_extract_integration_categories(integrations_text or combined_text),
+        integrations=_extract_integrations(integrations_text),
+        support_signals=_extract_support_signals(
+            f"{help_text} {support_text} {contact_text} {demo_text}".strip().lower()
+        ),
         case_studies=case_studies,
+        case_study_details=case_study_details,
         customers=customers,
         value_statements=value_statements,
         confidence=_determine_confidence(
@@ -526,6 +814,40 @@ def _extract_case_studies(text: str) -> list[str]:
     return case_studies
 
 
+def _extract_case_study_details(text: str, *, source_url: str) -> list[dict[str, str]]:
+    """Return structured case-study rows when the page exposes customer outcomes."""
+    normalized_text = re.sub(r"\s+", " ", text).strip()
+    if not normalized_text:
+        return []
+
+    details: list[dict[str, str]] = []
+    patterns = [
+        re.compile(
+            r"(?P<client>[A-Z][A-Za-z0-9&.\-]+)\s+(?:used|uses|using)\s+.+?\s+to\s+(?P<value_realized>[^.]+)",
+            flags=re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?P<client>[A-Z][A-Za-z0-9&.\-]+)\s+(?P<value_realized>(?:reduced|increased|improved|cut)\s+[^.]+)",
+            flags=re.IGNORECASE,
+        ),
+    ]
+
+    for pattern in patterns:
+        for match in pattern.finditer(normalized_text):
+            client = match.group("client").strip()
+            value_realized = match.group("value_realized").strip(" .")
+            detail = {
+                "client": client,
+                "title": f"{client} case study",
+                "use_case": _infer_case_study_use_case(value_realized),
+                "value_realized": value_realized,
+                "source_url": normalize_website_url(source_url),
+            }
+            if detail not in details:
+                details.append(detail)
+    return details
+
+
 def _extract_customers(text: str) -> list[str]:
     """Return simple named-customer signals from vendor text."""
     customers: list[str] = []
@@ -540,9 +862,130 @@ def _extract_customers(text: str) -> list[str]:
     return customers
 
 
+def _extract_products(text: str, *, source_url: str) -> list[dict[str, str]]:
+    """Return simple structured product rows for vendors with named products."""
+    normalized_text = re.sub(r"\s+", " ", text).strip()
+    if not normalized_text:
+        return []
+
+    products: list[dict[str, str]] = []
+    product_match = re.search(
+        r"(?:products?|platforms?)\s+(?:include|includes|are|:)\s*([^.]+)",
+        normalized_text,
+        flags=re.IGNORECASE,
+    )
+    if not product_match:
+        return products
+
+    raw_names = re.split(r",|\band\b", product_match.group(1))
+    for raw_name in raw_names:
+        name = raw_name.strip().strip(".")
+        if not name:
+            continue
+        products.append(
+            {
+                "name": name,
+                "category": "platform",
+                "description": normalized_text[:200],
+                "source_url": normalize_website_url(source_url),
+            }
+        )
+    return normalize_product_profiles(products)
+
+
+def _extract_leadership(text: str, *, source_url: str) -> list[dict[str, str]]:
+    """Return structured founder and executive evidence."""
+    normalized_text = re.sub(r"\s+", " ", text).strip()
+    if not normalized_text:
+        return []
+
+    profiles: list[dict[str, str]] = []
+    patterns = [
+        re.compile(
+            r"(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+),\s*(?P<title>CEO|Founder|Co-Founder|Chief Executive Officer|Chief Customer Officer)",
+        ),
+        re.compile(
+            r"(?P<title>CEO|Founder|Co-Founder|Chief Executive Officer|Chief Customer Officer)\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+        ),
+        re.compile(
+            r"founded by\s+(?P<name>[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+            flags=re.IGNORECASE,
+        ),
+    ]
+
+    for pattern in patterns:
+        for match in pattern.finditer(normalized_text):
+            title = str(match.groupdict().get("title") or "Founder").strip()
+            name = str(match.groupdict().get("name") or "").strip()
+            if not name:
+                continue
+            profiles.append(
+                {
+                    "name": name,
+                    "title": title,
+                    "source_url": normalize_website_url(source_url),
+                }
+            )
+    return normalize_leadership_profiles(profiles)
+
+
+def _extract_company_hq(text: str) -> str:
+    """Return a headquarters/location string when the site states it explicitly."""
+    match = re.search(
+        r"(?:headquartered in|based in)\s+([A-Z][A-Za-z\s,.-]+?)(?:\.|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
+def _extract_contact_email(text: str) -> str:
+    """Return the first canonical contact email found in the supplied text."""
+    match = re.search(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", text, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    return normalize_email_address(match.group(0))
+
+
+def _extract_integration_categories(text: str) -> list[str]:
+    """Return high-level integration buckets inferred from the integrations surface."""
+    lowered_text = text.lower()
+    categories: list[str] = []
+    for keywords, label in INTEGRATION_CATEGORY_RULES:
+        if _contains_any(lowered_text, keywords) and label not in categories:
+            categories.append(label)
+    return categories
+
+
+def _extract_integrations(text: str) -> list[str]:
+    """Return specific integration names from the integrations surface."""
+    integrations: list[str] = []
+    lowered_text = text.lower()
+    for integration_name in KNOWN_INTEGRATIONS:
+        if integration_name.lower() in lowered_text and integration_name not in integrations:
+            integrations.append(integration_name)
+    return integrations
+
+
+def _extract_support_signals(text: str) -> list[str]:
+    """Return support-surface capabilities discovered from help and support pages."""
+    signals: list[str] = []
+    for keywords, label in SUPPORT_SIGNAL_RULES:
+        if _contains_any(text, keywords) and label not in signals:
+            signals.append(label)
+    return signals
+
+
 def _contains_any(text: str, keywords: list[str]) -> bool:
     """Return True when the text contains any keyword or phrase."""
     return any(keyword in text for keyword in keywords)
+
+
+def _page_url(page_payloads: dict[str, dict[str, str | int]], page_key: str) -> str:
+    page_payload = page_payloads.get(page_key, {})
+    return normalize_website_url(page_payload.get("website") or page_payload.get("url") or "")
 
 
 def _extract_mission(text: str) -> str:
@@ -584,6 +1027,14 @@ def _extract_founded(text: str) -> str:
     if not match:
         return ""
     return match.group(1)
+
+
+def _infer_case_study_use_case(value_realized: str) -> str:
+    lowered = value_realized.lower()
+    for keywords, label in USE_CASE_RULES:
+        if _contains_any(lowered, keywords):
+            return label
+    return ""
 
 
 def _detect_boolean_signal(text: str, keywords: list[str]) -> bool | None:
@@ -649,6 +1100,11 @@ def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
         "pricing_page",
         "case_studies_page",
         "about_page",
+        "team_page",
+        "contact_page",
+        "demo_page",
+        "help_page",
+        "support_page",
         "security_page",
         "integrations_page",
     ]
@@ -665,7 +1121,17 @@ def _combine_page_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
 def _combine_relevance_texts(page_payloads: dict[str, dict[str, str | int]]) -> str:
     """Return text from the highest-signal relevance pages only."""
     texts: list[str] = []
-    for page_key in ["homepage", "product_page", "about_page", "integrations_page"]:
+    for page_key in [
+        "homepage",
+        "product_page",
+        "about_page",
+        "team_page",
+        "contact_page",
+        "demo_page",
+        "help_page",
+        "support_page",
+        "integrations_page",
+    ]:
         page_text = _page_text(page_payloads, page_key)
         if page_text:
             texts.append(page_text)

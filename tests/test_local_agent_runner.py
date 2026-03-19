@@ -393,6 +393,46 @@ def test_local_agent_runner_recognizes_auditor_roles(tmp_path: Path):
     assert packet["delegation_contract"]["write_scope"] == ["docs/audit/audit.md"]
 
 
+def test_local_agent_runner_recognizes_prework_role(tmp_path: Path):
+    create_file(tmp_path, "docs/agents/prework_agent.md", "# Prework Agent Prompt\n")
+    create_file(
+        tmp_path,
+        "docs/implementation_plan.md",
+        "## M18 Vendor intelligence schema expansion and deep enrichment\nStatus: `in_progress`\n\nObjective:\nPrep objective\n",
+    )
+    create_file(tmp_path, "project_state.json", json.dumps({"current_focus": "M18"}))
+    create_file(
+        tmp_path,
+        "milestone_registry.json",
+        json.dumps(
+            {
+                "milestones": [
+                    {
+                        "id": "M18",
+                        "title": "Vendor intelligence schema expansion and deep enrichment",
+                        "status": "in_progress",
+                        "dependencies": [],
+                        "verify": [],
+                    }
+                ]
+            }
+        ),
+    )
+    create_file(tmp_path, "runs/run_history.json", "[]")
+
+    packet = local_agent_runner.create_role_packet(
+        root=tmp_path,
+        prompt_path=tmp_path / "docs/agents/prework_agent.md",
+        milestone_id="M18",
+        changed_files=[],
+        artifact_paths=[],
+    )
+
+    assert packet["role"] == "prework"
+    assert packet["delegation_contract"]["execution_mode"] == "read_only"
+    assert packet["delegation_contract"]["write_scope"] == []
+
+
 def create_file(root: Path, relative_path: str, contents: str = "") -> None:
     """Write a file relative to a temp repo root."""
     path = root / relative_path

@@ -237,13 +237,26 @@
       ]
     },
     {
+      "id": "M13E",
+      "title": "Prework acceleration role",
+      "status": "complete",
+      "dependencies": [
+        "M13D"
+      ],
+      "verify": [
+        ".venv/bin/python -m pytest tests/test_autonomous_audit.py tests/test_autonomous_controller.py tests/test_local_agent_runner.py",
+        "Review docs/agents/prework_agent.md, docs/autonomous_dev_loop.md, docs/autonomous_kickoff_prompt.md, scripts/autonomous_controller.py, and scripts/local_agent_runner.py"
+      ]
+    },
+    {
       "id": "M16",
       "title": "End-to-end runtime hardening",
       "status": "complete",
       "dependencies": [
         "M15",
         "M13C",
-        "M13D"
+        "M13D",
+        "M13E"
       ],
       "verify": [
         ".venv/bin/python scripts/run_pipeline.py",
@@ -266,9 +279,10 @@
     {
       "id": "M18",
       "title": "Vendor intelligence schema expansion and deep enrichment",
-      "status": "in_progress",
+      "status": "complete",
       "dependencies": [
-        "M17"
+        "M17",
+        "M13E"
       ],
       "verify": [
         ".venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_llm_extractor.py tests/test_merge_results.py tests/test_site_explorer.py tests/test_vendor_profile_builder.py tests/test_supabase_client.py",
@@ -351,6 +365,20 @@
       "verify": [
         "Local preview review of public surfaces and CTA placement",
         "Review the public product requirements against the lead-magnet objective"
+      ]
+    },
+    {
+      "id": "M24A",
+      "title": "Lead capture, attribution, and follow-up operations",
+      "status": "not_started",
+      "dependencies": [
+        "M24"
+      ],
+      "verify": [
+        "Review the lead schema, attribution fields, and handoff model",
+        "Verify public capture surfaces persist enough context to attribute a lead back to source page and CTA",
+        "Verify the internal review/export path can show captured leads, attribution, and follow-up state",
+        ".venv/bin/python -m pytest"
       ]
     },
     {
@@ -449,6 +477,33 @@
       ],
       "verify": [
         "Review the enhancement workflow docs and agent prompt",
+        ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py"
+      ]
+    },
+    {
+      "id": "M33",
+      "title": "n8n development tool integration",
+      "status": "not_started",
+      "dependencies": [
+        "M13C"
+      ],
+      "verify": [
+        "Review the n8n tool spec and tool-registry entry",
+        "Review the docs for role access, development-only scope, and execution boundaries",
+        ".venv/bin/python scripts/autonomous_audit.py"
+      ]
+    },
+    {
+      "id": "M34",
+      "title": "Background-agent acceleration and safe parallel delegation",
+      "status": "not_started",
+      "dependencies": [
+        "M13B",
+        "M13C",
+        "M32"
+      ],
+      "verify": [
+        "Review the updated autonomous-loop and controller docs for the background-agent task model and safety boundaries",
         ".venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py"
       ]
     }

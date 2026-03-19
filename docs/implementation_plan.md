@@ -387,6 +387,23 @@ Verification:
 - Review `tools/supabase/cli.py` and `tools/supabase/tool_spec.json`
 - Verify tool docs explain the direct execution boundary clearly
 
+## M13E Prework acceleration role
+Status: `complete`
+
+Objective:
+Add a lightweight read-only prework role that prepares milestone context before planning and implementation so the autonomous loop spends less time rediscovering the repo.
+
+Acceptance criteria:
+- A dedicated `prework` role prompt exists under `docs/agents/`
+- The controller prompt sequence includes `prework -> planner -> builder -> reviewer -> QA`
+- The repo-native runner recognizes the `prework` role and emits structured packets for it
+- The controller-owned iteration loop executes prework before planner and builder
+- The autonomous docs describe prework as a read-only acceleration step rather than a separate milestone owner
+
+Verification:
+- `.venv/bin/python -m pytest tests/test_autonomous_audit.py tests/test_autonomous_controller.py tests/test_local_agent_runner.py`
+- Review `docs/agents/prework_agent.md`, `docs/autonomous_dev_loop.md`, `docs/autonomous_kickoff_prompt.md`, `scripts/autonomous_controller.py`, and `scripts/local_agent_runner.py`
+
 ## M16 End-to-end runtime hardening
 Status: `complete`
 
@@ -436,7 +453,7 @@ Current status:
 - `M17` has been closed through controller verification, review, and QA.
 
 ## M18 Vendor intelligence schema expansion and deep enrichment
-Status: `in_progress`
+Status: `complete`
 
 Objective:
 Deepen the product from a basic AI-in-CS vendor directory into a richer lead-magnet intelligence asset by expanding the vendor schema, hardening field normalization, and extracting more specific commercial evidence from vendor websites. This milestone now explicitly includes defining and implementing a superset vendor-intelligence schema based on real vendor-site evidence from platforms such as Gainsight.
@@ -488,7 +505,7 @@ Acceptance criteria:
   - AI/GEO-style search prompts
 - For each executed query, the system can persist ranked surfaced vendors with fields such as:
   - buyer role
-  - search channel (`google` or `geo`)
+  - search channel (`google` or `geo - openai`)
   - query text
   - observed rank position
   - surfaced vendor name
@@ -594,6 +611,26 @@ Acceptance criteria:
 Verification:
 - Local preview review of public surfaces and CTA placement
 - Review the public product requirements against the lead-magnet objective
+
+## M24A Lead capture, attribution, and follow-up operations
+Status: `not_started`
+
+Objective:
+Turn lead-magnet interest into attributable pipeline for the `successbycs.com` fractional Head of CS business instead of stopping at page-level CTA clicks.
+
+Acceptance criteria:
+- A repo-owned lead capture model exists for gated assets, newsletter signup, or consultation-intent submissions
+- Captured leads preserve source context such as entry page, vendor/profile context, CTA variant, referrer, and UTM attribution where available
+- The product distinguishes lightweight content interest from higher-intent service interest such as advisory, audit, or fractional leadership conversations
+- Operators can review captured leads and their follow-up status through an internal surface or export path
+- The system defines the first follow-up handoff clearly enough to support owner notification, CRM sync, or a structured consultation-booking workflow
+- Success metrics are framed around attributable leads and qualified follow-up outcomes, not just CTA clicks
+
+Verification:
+- Review the lead schema, attribution fields, and handoff model
+- Verify public capture surfaces persist enough context to attribute a lead back to source page and CTA
+- Verify the internal review/export path can show captured leads, attribution, and follow-up state
+- `.venv/bin/python -m pytest` for the lead-capture and attribution coverage added by the milestone
 
 ## M25 Editorial auto-inclusion governance
 Status: `not_started`
@@ -717,6 +754,45 @@ Acceptance criteria:
 
 Verification:
 - Review the enhancement workflow docs and agent prompt
+- `.venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py`
+
+## M33 n8n development tool integration
+Status: `not_started`
+
+Objective:
+Add `n8n` to the repo tool layer as a development tool so the autonomous system can use it in a controlled way for workflow prototyping, automation experiments, and local integration support.
+
+Acceptance criteria:
+- The `/tools` layer declares `n8n` as a repo-owned development tool with a clear tool spec
+- The docs explain what `n8n` may be used for during development and what is out of scope
+- The tool boundary distinguishes:
+  - local/development workflow automation
+  - product/runtime automation
+- Controller and runner documentation explain how roles may access `n8n` when it is declared for a milestone
+- The tool contract captures allowed operations, environment assumptions, and approval/safety expectations
+
+Verification:
+- Review the `n8n` tool spec and tool-registry entry
+- Review the docs for role access, development-only scope, and execution boundaries
+- `.venv/bin/python scripts/autonomous_audit.py`
+
+## M34 Background-agent acceleration and safe parallel delegation
+Status: `not_started`
+
+Objective:
+Speed up autonomous development by introducing an explicit background-agent model for bounded read-only delegation, parallel prep/proof work, and deterministic handoff back into the main milestone loop.
+
+Acceptance criteria:
+- The docs define what a background agent is and how it differs from the main milestone-owner roles (`planner`, `builder`, `reviewer`, `qa`)
+- The controller can declare safe background-task categories such as repo scanning, changed-file triage, test-impact discovery, doc-drift detection, and proof/artifact collection
+- Background-agent work is read-only by default and may run in parallel only when the delegated task contract keeps scope explicit and non-overlapping
+- Mutating implementation work remains serial unless a future milestone adds explicit isolated-write coordination
+- Role packets and/or run history can link background-task outputs back to the owning milestone cycle in a deterministic way
+- The control-plane docs explain when background delegation should be used, when it should not be used, and how its outputs must be consumed by the main role flow
+- Tests prove that background delegation cannot bypass write-scope rules, milestone verification, review, QA, or completion gating
+
+Verification:
+- Review the updated autonomous-loop and controller docs for the background-agent task model and safety boundaries
 - `.venv/bin/python -m pytest tests/test_autonomous_controller.py tests/test_local_agent_runner.py`
 
 ## Milestone Selection Rule

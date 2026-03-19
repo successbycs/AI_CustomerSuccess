@@ -56,6 +56,11 @@ def explore_vendor_site(homepage_payload: PagePayload) -> ExploredPages:
             "case_studies_page",
             "security_page",
             "about_page",
+            "team_page",
+            "contact_page",
+            "demo_page",
+            "help_page",
+            "support_page",
             "integrations_page",
         } and candidate.page_key not in explored_pages:
             explored_pages[candidate.page_key] = page_payload
@@ -201,6 +206,9 @@ def _looks_like_high_value_extra(text: str) -> bool:
             "ai",
             "automation",
             "customer success",
+            "contact",
+            "demo",
+            "help",
             "demo",
             "feature",
             "platform",

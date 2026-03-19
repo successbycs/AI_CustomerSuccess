@@ -6,7 +6,11 @@ import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from services.extraction.vendor_intel import VendorIntelligence
+from services.extraction.vendor_intel import (
+    VendorIntelligence,
+    normalize_email_address,
+    normalize_website_url,
+)
 
 if TYPE_CHECKING:
     from supabase import Client
@@ -27,7 +31,21 @@ VENDOR_PROFILE_SELECT = ",".join(
         "free_trial",
         "soc2",
         "founded",
+        "products",
+        "leadership",
+        "company_hq",
+        "contact_email",
+        "contact_page_url",
+        "demo_url",
+        "help_center_url",
+        "support_url",
+        "about_url",
+        "team_url",
+        "integration_categories",
+        "integrations",
+        "support_signals",
         "case_studies",
+        "case_study_details",
         "customers",
         "value_statements",
         "confidence",
@@ -53,9 +71,23 @@ VENDOR_WRITE_COLUMNS = (
     "free_trial",
     "soc2",
     "founded",
+    "products",
+    "leadership",
+    "company_hq",
+    "contact_email",
+    "contact_page_url",
+    "demo_url",
+    "help_center_url",
+    "support_url",
+    "about_url",
+    "team_url",
+    "integration_categories",
+    "integrations",
+    "support_signals",
     "use_cases",
     "lifecycle_stages",
     "case_studies",
+    "case_study_details",
     "customers",
     "value_statements",
     "evidence_urls",
@@ -115,10 +147,11 @@ def _create_supabase_client(supabase_url: str, supabase_key: str) -> "Client":
 def vendor_exists(website: str, client: "Client | None" = None) -> bool:
     """Return True when a vendor already exists in cs_vendors and is export-ready."""
     supabase = client or get_supabase_client()
+    normalized_website = normalize_website_url(website)
     response = (
         supabase.table("cs_vendors")
         .select("website,directory_fit,directory_category,include_in_directory")
-        .eq("website", website)
+        .eq("website", normalized_website or website)
         .limit(1)
         .execute()
     )
@@ -229,11 +262,12 @@ def find_vendor_by_lookup(vendor_lookup: str, client: "Client | None" = None) ->
     lookup = vendor_lookup.strip()
     if not lookup:
         return None
+    normalized_lookup = normalize_website_url(lookup if lookup.startswith("http") else f"https://{lookup}")
 
     website_matches = (
         supabase.table("cs_vendors")
         .select(select_columns)
-        .eq("website", lookup if lookup.startswith("http") else f"https://{lookup}")
+        .eq("website", normalized_lookup or lookup)
         .limit(1)
         .execute()
     )
@@ -362,7 +396,7 @@ def build_vendor_row(
 
     return {
         "name": intelligence.vendor_name,
-        "website": intelligence.website,
+        "website": normalize_website_url(intelligence.website),
         "source": vendor.get("source"),
         "confidence": intelligence.confidence or None,
         "mission": intelligence.mission or _extract_mission(raw_description or ""),
@@ -379,12 +413,26 @@ def build_vendor_row(
             ["soc 2", "soc2"],
         ),
         "founded": intelligence.founded or None,
+        "products": intelligence.products or [],
+        "leadership": intelligence.leadership or [],
+        "company_hq": intelligence.company_hq or None,
+        "contact_email": normalize_email_address(intelligence.contact_email) or None,
+        "contact_page_url": normalize_website_url(intelligence.contact_page_url) or None,
+        "demo_url": normalize_website_url(intelligence.demo_url) or None,
+        "help_center_url": normalize_website_url(intelligence.help_center_url) or None,
+        "support_url": normalize_website_url(intelligence.support_url) or None,
+        "about_url": normalize_website_url(intelligence.about_url) or None,
+        "team_url": normalize_website_url(intelligence.team_url) or None,
+        "integration_categories": intelligence.integration_categories or [],
+        "integrations": intelligence.integrations or [],
+        "support_signals": intelligence.support_signals or [],
         "use_cases": intelligence.use_cases,
         "lifecycle_stages": intelligence.lifecycle_stages,
         "case_studies": intelligence.case_studies or [],
+        "case_study_details": intelligence.case_study_details or [],
         "customers": intelligence.customers or [],
         "value_statements": intelligence.value_statements or [],
-        "evidence_urls": intelligence.evidence_urls or [],
+        "evidence_urls": [url for url in (normalize_website_url(url) for url in intelligence.evidence_urls) if url],
         "directory_fit": intelligence.directory_fit or None,
         "directory_category": intelligence.directory_category or None,
         "include_in_directory": intelligence.include_in_directory,

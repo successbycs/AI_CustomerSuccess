@@ -27,6 +27,7 @@ Milestone selection rule:
 3. Do not skip ahead unless explicitly instructed by the human.
 
 Execution rules:
+- Start each milestone iteration with the repo prework role so the planner and builder receive a current gap map and verification-focused prep context.
 - Keep changes bounded to the selected milestone.
 - Update any docs made stale by the implementation before closing the milestone.
 - Add or update tests whenever behavior changes.

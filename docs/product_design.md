@@ -79,13 +79,28 @@ source
 mission  
 usp  
 icp  
+icp_buyer  
 use_cases  
 lifecycle_stages  
 pricing  
 free_trial  
 soc2  
 founded  
+products  
+leadership  
+company_hq  
+contact_email  
+contact_page_url  
+demo_url  
+help_center_url  
+support_url  
+about_url  
+team_url  
+integration_categories  
+integrations  
+support_signals  
 case_studies  
+case_study_details  
 customers  
 value_statements  
 confidence  
@@ -93,6 +108,16 @@ evidence_urls
 directory_fit  
 directory_category  
 include_in_directory  
+
+The proof model is intentionally split:
+
+- `value_statements` are vendor-level marketing or positioning claims
+- `case_study_details` store structured customer-story outcomes such as client, use case, value realized, and source URL
+
+Canonical formatting rules also apply before persistence:
+
+- websites and page URLs are normalized to a canonical URL format
+- contact emails are validated and lowercased before write-time storage
 
 ---
 

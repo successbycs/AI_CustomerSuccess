@@ -86,7 +86,13 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
                     '"use_cases": ["churn prediction", "renewal forecasting"], '
                     '"pricing": ["contact sales", "per seat"], '
                     '"free_trial": false, "soc2": true, "founded": "2022", '
-                    '"case_studies": ["case study"], "customers": ["Acme"], '
+                    '"products": [{"name": "Journey Hub", "category": "platform", "description": "Guided onboarding", "source_url": "https://example.com/product"}], '
+                    '"leadership": [{"name": "Jane Doe", "title": "CEO", "source_url": "https://example.com/team"}], '
+                    '"company_hq": "Austin, Texas", "contact_email": "sales@example.com", '
+                    '"integration_categories": ["crm"], "integrations": ["Salesforce"], "support_signals": ["help center"], '
+                    '"case_studies": ["case study"], '
+                    '"case_study_details": [{"client": "Acme", "title": "Acme case study", "use_case": "renewal management", "value_realized": "reduced churn by 20%", "source_url": "https://example.com/customers/acme"}], '
+                    '"customers": ["Acme"], '
                     '"value_statements": ["reduce churn"], "confidence": "high"}'
                 )
             }
@@ -130,7 +136,36 @@ def test_extract_vendor_intelligence_parses_structured_json(monkeypatch):
     assert result.free_trial is False
     assert result.soc2 is True
     assert result.founded == "2022"
+    assert result.products == [
+        {
+            "name": "Journey Hub",
+            "category": "platform",
+            "description": "Guided onboarding",
+            "source_url": "https://example.com/product",
+        }
+    ]
+    assert result.leadership == [
+        {
+            "name": "Jane Doe",
+            "title": "CEO",
+            "source_url": "https://example.com/team",
+        }
+    ]
+    assert result.company_hq == "Austin, Texas"
+    assert result.contact_email == "sales@example.com"
+    assert result.integration_categories == ["crm"]
+    assert result.integrations == ["Salesforce"]
+    assert result.support_signals == ["help center"]
     assert result.case_studies == ["case study"]
+    assert result.case_study_details == [
+        {
+            "client": "Acme",
+            "title": "Acme case study",
+            "use_case": "renewal management",
+            "value_realized": "reduced churn by 20%",
+            "source_url": "https://example.com/customers/acme",
+        }
+    ]
     assert result.customers == ["Acme"]
     assert result.value_statements == ["reduce churn"]
     assert result.confidence == "high"

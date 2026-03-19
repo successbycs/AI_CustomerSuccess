@@ -40,6 +40,7 @@ def infer_role(prompt_path: Path) -> str:
     """Infer the role name from the prompt file path."""
     name = prompt_path.stem.lower()
     for role in (
+        "prework",
         "closeout_auditor",
         "backfill_auditor",
         "controller",
@@ -100,6 +101,16 @@ def build_role_checklist(role: str, milestone: dict[str, Any], available_tools: 
         ]
         if available_tools:
             checklist.append("Expose declared repo tools to roles through the controller-governed access model")
+        return checklist
+    if role == "prework":
+        checklist = [
+            f"Prepare milestone context for {milestone['id']}",
+            "Map the likely code, schema, docs, export, and test surfaces before implementation begins",
+            "Identify reusable blockers, dependency gaps, and proof risks early",
+            "Produce a concise prep summary the planner can use without re-discovering the repo",
+        ]
+        if available_tools:
+            checklist.append("Use only declared read/inspect tool operations to gather prep context")
         return checklist
     if role == "planner":
         checklist = [
@@ -258,6 +269,18 @@ def backend_metadata(cli_command: str | None) -> dict[str, Any]:
     return {"backend": "custom_cli", "model": None}
 
 
+def resolve_cli_command(cli_command: str, *, execution_root: Path) -> str:
+    """Resolve repo-relative CLI paths against the real project root."""
+    tokens = shlex.split(cli_command)
+    if not tokens:
+        return cli_command
+
+    for index, token in enumerate(tokens):
+        if token.startswith("./") or token.startswith(".venv/") or token.startswith("scripts/"):
+            tokens[index] = str((execution_root / token).resolve())
+    return shlex.join(tokens)
+
+
 def collect_changed_files(root: Path) -> list[str]:
     """Return changed repo files, excluding generated run artifacts."""
     try:
@@ -297,6 +320,7 @@ def recent_history_evidence(root: Path, milestone_id: str) -> dict[str, Any]:
     """Return the latest verification/review/QA history entries for a milestone."""
     run_history = autonomous_controller.load_run_history(root)
     return {
+        "prework": autonomous_controller.latest_role_output(root, milestone_id, "prework"),
         "verify": autonomous_controller.latest_history_entry(run_history, action="verify", milestone_id=milestone_id),
         "review": autonomous_controller.latest_history_entry(run_history, action="review", milestone_id=milestone_id),
         "qa": autonomous_controller.latest_history_entry(run_history, action="qa", milestone_id=milestone_id),
@@ -374,13 +398,24 @@ def create_role_packet(
         "cycle_id": cycle_id,
     }
     configured_cli = str(project_state.get("agent_runner", {}).get("cli_command") or "").strip()
+    explicit_cli = (cli_command or "").strip()
     env_cli = str(os.environ.get("AUTONOMOUS_AGENT_CLI", "")).strip()
-    effective_cli = (cli_command or "").strip() or env_cli or configured_cli
+    effective_cli_source = "explicit" if explicit_cli else ("env" if env_cli else ("project_state" if configured_cli else ""))
+    effective_cli = explicit_cli or env_cli or configured_cli
+    if effective_cli:
+        effective_cli = resolve_cli_command(effective_cli, execution_root=PROJECT_ROOT)
     packet.update(backend_metadata(effective_cli))
     if effective_cli:
         packet["runner_mode"] = "external_local_ai_cli"
-        packet["result"] = run_local_ai_cli(cli_command=effective_cli, packet=packet, root=root)
-        packet["cli_command"] = effective_cli
+        try:
+            packet["result"] = run_local_ai_cli(cli_command=effective_cli, packet=packet, root=root)
+            packet["cli_command"] = effective_cli
+        except RuntimeError:
+            if effective_cli_source == "env" and root != PROJECT_ROOT:
+                packet["runner_mode"] = "repo_native_local_packet"
+                packet["result"] = build_fallback_result(role, milestone)
+            else:
+                raise
     else:
         packet["result"] = build_fallback_result(role, milestone)
     return packet

@@ -22,6 +22,11 @@ def test_explore_vendor_site_discovers_high_value_pages_and_extra_pages(monkeypa
             '<a href="/platform">Platform</a>'
             '<a href="/customers">Customers</a>'
             '<a href="/security">Security</a>'
+            '<a href="/about">About</a>'
+            '<a href="/team">Team</a>'
+            '<a href="/contact">Contact</a>'
+            '<a href="/demo">Book Demo</a>'
+            '<a href="/help">Help Center</a>'
             '<a href="/integrations">Integrations</a>'
             '<a href="/ai-copilot">AI Copilot</a>'
             '<a href="https://reddit.com/r/customersuccess">Reddit</a>'
@@ -36,6 +41,11 @@ def test_explore_vendor_site_discovers_high_value_pages_and_extra_pages(monkeypa
             "https://example.com/platform": MockResponse(200, "<html><body>Customer success platform</body></html>"),
             "https://example.com/customers": MockResponse(200, "<html><body>Customer stories</body></html>"),
             "https://example.com/security": MockResponse(200, "<html><body>SOC2 and trust center</body></html>"),
+            "https://example.com/about": MockResponse(200, "<html><body>About ExampleCorp</body></html>"),
+            "https://example.com/team": MockResponse(200, "<html><body>Leadership team</body></html>"),
+            "https://example.com/contact": MockResponse(200, "<html><body>Contact us</body></html>"),
+            "https://example.com/demo": MockResponse(200, "<html><body>Book a demo</body></html>"),
+            "https://example.com/help": MockResponse(200, "<html><body>Help center</body></html>"),
             "https://example.com/integrations": MockResponse(200, "<html><body>Integrations with Salesforce</body></html>"),
         }
         return responses[url]
@@ -51,10 +61,19 @@ def test_explore_vendor_site_discovers_high_value_pages_and_extra_pages(monkeypa
         "product_page",
         "case_studies_page",
         "security_page",
+        "about_page",
+        "team_page",
+        "contact_page",
+        "demo_page",
+        "help_page",
         "integrations_page",
     ]
     assert result["pricing_page"]["website"] == "https://example.com/pricing"
     assert result["product_page"]["text"] == "Customer success platform"
+    assert result["team_page"]["website"] == "https://example.com/team"
+    assert result["contact_page"]["website"] == "https://example.com/contact"
+    assert result["demo_page"]["website"] == "https://example.com/demo"
+    assert result["help_page"]["website"] == "https://example.com/help"
     assert result["integrations_page"]["url"] == "https://example.com/integrations"
     assert result["extra_pages"] == []
 
@@ -73,6 +92,8 @@ def test_explore_vendor_site_filters_external_and_junk_links_and_keeps_best_prio
             '<a href="/plans">Pricing</a>'
             '<a href="/features">Features</a>'
             '<a href="/about">About</a>'
+            '<a href="/team">Team</a>'
+            '<a href="/contact">Contact</a>'
             '<a href="https://external.example.com/integrations">External</a>'
             '<a href="/ai-copilot">AI Copilot</a>'
             "</body></html>"
@@ -85,6 +106,8 @@ def test_explore_vendor_site_filters_external_and_junk_links_and_keeps_best_prio
             "https://example.com/plans": MockResponse(200, "<html><body>$49 per seat</body></html>"),
             "https://example.com/features": MockResponse(200, "<html><body>Feature overview</body></html>"),
             "https://example.com/about": MockResponse(200, "<html><body>About ExampleCorp</body></html>"),
+            "https://example.com/team": MockResponse(200, "<html><body>Leadership team</body></html>"),
+            "https://example.com/contact": MockResponse(200, "<html><body>Contact us</body></html>"),
             "https://example.com/ai-copilot": MockResponse(200, "<html><body>AI copilot for CSMs</body></html>"),
         }
         return responses[url]
@@ -98,6 +121,8 @@ def test_explore_vendor_site_filters_external_and_junk_links_and_keeps_best_prio
     assert result["pricing_page"]["website"] == "https://example.com/plans"
     assert result["product_page"]["website"] == "https://example.com/features"
     assert result["about_page"]["website"] == "https://example.com/about"
+    assert result["team_page"]["website"] == "https://example.com/team"
+    assert result["contact_page"]["website"] == "https://example.com/contact"
     assert result["extra_pages"] == [
         {
             "vendor_name": "",

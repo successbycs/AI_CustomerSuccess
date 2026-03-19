@@ -12,8 +12,22 @@ CREATE TABLE IF NOT EXISTS public.cs_vendors (
   free_trial BOOLEAN,
   soc2 BOOLEAN,
   founded TEXT,
+  products JSONB DEFAULT '[]'::jsonb,
+  leadership JSONB DEFAULT '[]'::jsonb,
+  company_hq TEXT,
+  contact_email TEXT,
+  contact_page_url TEXT,
+  demo_url TEXT,
+  help_center_url TEXT,
+  support_url TEXT,
+  about_url TEXT,
+  team_url TEXT,
+  integration_categories TEXT[] DEFAULT '{}'::text[],
+  integrations TEXT[] DEFAULT '{}'::text[],
+  support_signals TEXT[] DEFAULT '{}'::text[],
   use_cases TEXT[] DEFAULT '{}'::text[],
   lifecycle_stages TEXT[] DEFAULT '{}'::text[],
+  case_study_details JSONB DEFAULT '[]'::jsonb,
   raw_description TEXT,
   confidence TEXT,
   first_seen DATE DEFAULT CURRENT_DATE,
@@ -38,8 +52,22 @@ ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS icp_buyer JSONB DEFAULT '
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS free_trial BOOLEAN;
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS soc2 BOOLEAN;
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS founded TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS products JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS leadership JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS company_hq TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS contact_email TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS contact_page_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS demo_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS help_center_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS support_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS about_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS team_url TEXT;
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS integration_categories TEXT[] DEFAULT '{}'::text[];
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS integrations TEXT[] DEFAULT '{}'::text[];
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS support_signals TEXT[] DEFAULT '{}'::text[];
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS use_cases TEXT[] DEFAULT '{}'::text[];
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS lifecycle_stages TEXT[] DEFAULT '{}'::text[];
+ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS case_study_details JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS confidence TEXT;
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS last_updated TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.cs_vendors ADD COLUMN IF NOT EXISTS is_new BOOLEAN DEFAULT TRUE;

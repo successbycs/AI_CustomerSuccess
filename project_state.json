@@ -1,5 +1,5 @@
 {
-  "current_focus": "M18",
+  "current_focus": "M19",
   "milestones": [
     "M01",
     "M02",
@@ -18,6 +18,7 @@
     "M13B",
     "M13C",
     "M13D",
+    "M13E",
     "M14",
     "M15",
     "M16",
@@ -29,6 +30,7 @@
     "M22",
     "M23",
     "M24",
+    "M24A",
     "M25",
     "M26",
     "M27",
@@ -36,7 +38,9 @@
     "M29",
     "M30",
     "M31",
-    "M32"
+    "M32",
+    "M33",
+    "M34"
   ],
   "verification_script": "scripts/verify_project.sh",
   "tool_registry": "tools/tool_registry.json",
@@ -62,6 +66,7 @@
   "cycle_script": "scripts/run_autonomous_cycle.sh",
   "agent_prompts": {
     "controller": "docs/agents/controller_agent.md",
+    "prework": "docs/agents/prework_agent.md",
     "planner": "docs/agents/planner_agent.md",
     "builder": "docs/agents/builder_agent.md",
     "reviewer": "docs/agents/reviewer_agent.md",

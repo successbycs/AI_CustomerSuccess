@@ -246,6 +246,105 @@ def test_extract_vendor_intelligence_supports_multiple_exact_lifecycle_stages():
     ]
 
 
+def test_extract_vendor_intelligence_captures_richer_company_contact_and_case_study_fields():
+    explored_pages = {
+        "homepage": {
+            "vendor_name": "ExampleCorp",
+            "website": "https://www.example.com/",
+            "text": (
+                "ExampleCorp helps customer success teams improve adoption. "
+                "Products include Journey Hub and Renewal AI."
+            ),
+        },
+        "about_page": {
+            "website": "https://www.example.com/about/",
+            "text": (
+                "ExampleCorp is headquartered in Austin, Texas. "
+                "Founded by Jane Doe. Jane Doe, CEO, leads the company."
+            ),
+        },
+        "team_page": {
+            "website": "https://www.example.com/team/",
+            "text": "Leadership team: Jane Doe, CEO.",
+        },
+        "contact_page": {
+            "website": "https://www.example.com/contact/",
+            "text": "Email us at Sales@Example.com for more details.",
+        },
+        "demo_page": {
+            "website": "https://www.example.com/demo/",
+            "text": "Book a demo today.",
+        },
+        "help_page": {
+            "website": "https://www.example.com/help/",
+            "text": "Browse our help center and knowledge base.",
+        },
+        "support_page": {
+            "website": "https://www.example.com/support/",
+            "text": "Customer support portal and training academy.",
+        },
+        "integrations_page": {
+            "website": "https://www.example.com/integrations/",
+            "text": "Integrations with Salesforce, Slack, and Zendesk.",
+        },
+        "case_studies_page": {
+            "website": "https://www.example.com/customers/acme/",
+            "text": "Acme used ExampleCorp to reduce churn by 20% and improve onboarding.",
+        },
+    }
+
+    result = extract_vendor_intelligence(explored_pages)
+
+    assert result.website == "https://example.com"
+    assert result.products == [
+        {
+            "name": "Journey Hub",
+            "category": "platform",
+            "description": "ExampleCorp helps customer success teams improve adoption. Products include Journey Hub and Renewal AI.",
+            "source_url": "https://example.com",
+        },
+        {
+            "name": "Renewal AI",
+            "category": "platform",
+            "description": "ExampleCorp helps customer success teams improve adoption. Products include Journey Hub and Renewal AI.",
+            "source_url": "https://example.com",
+        },
+    ]
+    assert result.leadership == [
+        {
+            "name": "Jane Doe",
+            "title": "CEO",
+            "source_url": "https://example.com/team",
+        },
+        {
+            "name": "Jane Doe",
+            "title": "Founder",
+            "source_url": "https://example.com/team",
+        },
+    ]
+    assert result.company_hq == "Austin, Texas"
+    assert result.contact_email == "sales@example.com"
+    assert result.contact_page_url == "https://example.com/contact"
+    assert result.demo_url == "https://example.com/demo"
+    assert result.help_center_url == "https://example.com/help"
+    assert result.support_url == "https://example.com/support"
+    assert result.about_url == "https://example.com/about"
+    assert result.team_url == "https://example.com/team"
+    assert result.integration_categories == ["crm", "communication", "support"]
+    assert result.integrations == ["Salesforce", "Slack", "Zendesk"]
+    assert result.support_signals == ["help center", "knowledge base", "support portal", "training"]
+    assert result.case_study_details == [
+        {
+            "client": "Acme",
+            "title": "Acme case study",
+            "use_case": "churn prevention",
+            "value_realized": "reduce churn by 20% and improve onboarding",
+            "source_url": "https://example.com/customers/acme",
+        }
+    ]
+    assert "reduce churn" in result.value_statements
+
+
 def test_extract_vendor_intelligence_caps_confidence_when_cs_relevance_is_weak():
     explored_pages = {
         "homepage": {

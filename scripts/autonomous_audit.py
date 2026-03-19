@@ -21,6 +21,7 @@ FILE_SPECS = (
     ("docs/project_brain.md", "core_docs", True, False),
     ("docs/autonomous_dev_loop.md", "core_docs", True, False),
     ("docs/agents/controller_agent.md", "agent_prompts", True, False),
+    ("docs/agents/prework_agent.md", "agent_prompts", True, False),
     ("docs/agents/planner_agent.md", "agent_prompts", True, False),
     ("docs/agents/builder_agent.md", "agent_prompts", True, False),
     ("docs/agents/reviewer_agent.md", "agent_prompts", True, False),

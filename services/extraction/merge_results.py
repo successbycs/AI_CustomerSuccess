@@ -23,7 +23,29 @@ def merge_vendor_intelligence(
     merged_icp_buyer = _merge_buyer_profiles(deterministic.icp_buyer, llm_result.icp_buyer)
     merged_use_cases = _merge_unique_strings(deterministic.use_cases, llm_result.use_cases)
     merged_pricing = _merge_unique_strings(deterministic.pricing, llm_result.pricing)
+    merged_products = _merge_named_records(deterministic.products, llm_result.products, key_field="name")
+    merged_leadership = _merge_named_records(
+        deterministic.leadership,
+        llm_result.leadership,
+        key_field="name",
+        secondary_key="title",
+    )
+    merged_integration_categories = _merge_unique_strings(
+        deterministic.integration_categories,
+        llm_result.integration_categories,
+    )
+    merged_integrations = _merge_unique_strings(deterministic.integrations, llm_result.integrations)
+    merged_support_signals = _merge_unique_strings(
+        deterministic.support_signals,
+        llm_result.support_signals,
+    )
     merged_case_studies = _merge_unique_strings(deterministic.case_studies, llm_result.case_studies)
+    merged_case_study_details = _merge_named_records(
+        deterministic.case_study_details,
+        llm_result.case_study_details,
+        key_field="client",
+        secondary_key="value_realized",
+    )
     merged_customers = _merge_unique_strings(deterministic.customers, llm_result.customers)
     merged_value_statements = _merge_unique_strings(
         deterministic.value_statements,
@@ -54,7 +76,21 @@ def merge_vendor_intelligence(
         free_trial=_prefer_optional_bool(deterministic.free_trial, llm_result.free_trial),
         soc2=_prefer_optional_bool(deterministic.soc2, llm_result.soc2),
         founded=_prefer_text_value(deterministic.founded, llm_result.founded),
+        products=merged_products,
+        leadership=merged_leadership,
+        company_hq=_prefer_text_value(deterministic.company_hq, llm_result.company_hq),
+        contact_email=_prefer_text_value(deterministic.contact_email, llm_result.contact_email),
+        contact_page_url=deterministic.contact_page_url,
+        demo_url=deterministic.demo_url,
+        help_center_url=deterministic.help_center_url,
+        support_url=deterministic.support_url,
+        about_url=deterministic.about_url,
+        team_url=deterministic.team_url,
+        integration_categories=merged_integration_categories,
+        integrations=merged_integrations,
+        support_signals=merged_support_signals,
         case_studies=merged_case_studies,
+        case_study_details=merged_case_study_details,
         customers=merged_customers,
         value_statements=merged_value_statements,
         confidence=_prefer_confidence(deterministic.confidence, llm_result.confidence),
@@ -101,6 +137,39 @@ def _merge_buyer_profiles(*collections: list[dict[str, Any]]) -> list[dict[str, 
                 existing.get("geo_queries", []),
                 item.get("geo_queries", []),
             )[:5]
+    return list(merged.values())
+
+
+def _merge_named_records(
+    *collections: list[dict[str, Any]],
+    key_field: str,
+    secondary_key: str = "",
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for collection in collections:
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+            primary_value = str(item.get(key_field) or "").strip()
+            secondary_value = str(item.get(secondary_key) or "").strip() if secondary_key else ""
+            if not primary_value:
+                continue
+            key = (primary_value.lower(), secondary_value.lower())
+            existing = merged.get(key)
+            if existing is None:
+                merged[key] = dict(item)
+                continue
+            for field_name, field_value in item.items():
+                if isinstance(field_value, str):
+                    merged[key][field_name] = _prefer_text_value(
+                        str(existing.get(field_name) or ""),
+                        field_value,
+                    )
+                elif isinstance(field_value, list):
+                    merged[key][field_name] = _merge_unique_strings(
+                        existing.get(field_name, []),
+                        field_value,
+                    )
     return list(merged.values())
 
 

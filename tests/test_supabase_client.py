@@ -169,3 +169,102 @@ def test_upsert_vendor_result_uses_website_conflict_key():
         "Reduce churn with customer health visibility. Free trial available. SOC 2 compliant."
     )
     assert row["is_new"] is True
+
+
+def test_upsert_vendor_result_normalizes_richer_m18_fields():
+    fake_client = FakeSupabaseClient([])
+    vendor = {
+        "vendor_name": "ExampleCorp",
+        "website": "https://www.example.com/",
+        "source": "web_search",
+    }
+    homepage_payload = {
+        "vendor_name": "ExampleCorp",
+        "website": "https://www.example.com/",
+        "text": "Homepage text.",
+    }
+    intelligence = VendorIntelligence(
+        vendor_name="ExampleCorp",
+        website="https://www.example.com/",
+        contact_email="INFO@EXAMPLE.COM",
+        contact_page_url="https://www.example.com/contact/",
+        demo_url="example.com/demo",
+        help_center_url="https://www.example.com/help/",
+        support_url="https://www.example.com/support/",
+        about_url="https://www.example.com/about/",
+        team_url="https://www.example.com/team/",
+        company_hq="Austin, Texas",
+        products=[
+            {
+                "name": "Journey Hub",
+                "category": "platform",
+                "description": "Guided onboarding",
+                "source_url": "https://www.example.com/products/journey-hub/",
+            }
+        ],
+        leadership=[
+            {
+                "name": "Jane Doe",
+                "title": "CEO",
+                "source_url": "https://www.example.com/team/",
+            }
+        ],
+        integration_categories=["crm"],
+        integrations=["Salesforce"],
+        support_signals=["help center"],
+        case_study_details=[
+            {
+                "client": "Acme",
+                "title": "Acme case study",
+                "use_case": "onboarding",
+                "value_realized": "reduced churn by 20%",
+                "source_url": "https://www.example.com/customers/acme/",
+            }
+        ],
+        evidence_urls=["https://www.example.com/contact/"],
+    )
+
+    row = supabase_client.upsert_vendor_result(
+        vendor,
+        homepage_payload,
+        intelligence,
+        client=fake_client,
+    )
+
+    assert row["website"] == "https://example.com"
+    assert row["contact_email"] == "info@example.com"
+    assert row["contact_page_url"] == "https://example.com/contact"
+    assert row["demo_url"] == "https://example.com/demo"
+    assert row["help_center_url"] == "https://example.com/help"
+    assert row["support_url"] == "https://example.com/support"
+    assert row["about_url"] == "https://example.com/about"
+    assert row["team_url"] == "https://example.com/team"
+    assert row["company_hq"] == "Austin, Texas"
+    assert row["products"] == [
+        {
+            "name": "Journey Hub",
+            "category": "platform",
+            "description": "Guided onboarding",
+            "source_url": "https://example.com/products/journey-hub",
+        }
+    ]
+    assert row["leadership"] == [
+        {
+            "name": "Jane Doe",
+            "title": "CEO",
+            "source_url": "https://example.com/team",
+        }
+    ]
+    assert row["integration_categories"] == ["crm"]
+    assert row["integrations"] == ["Salesforce"]
+    assert row["support_signals"] == ["help center"]
+    assert row["case_study_details"] == [
+        {
+            "client": "Acme",
+            "title": "Acme case study",
+            "use_case": "onboarding",
+            "value_realized": "reduced churn by 20%",
+            "source_url": "https://example.com/customers/acme",
+        }
+    ]
+    assert row["evidence_urls"] == ["https://example.com/contact"]

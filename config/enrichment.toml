@@ -9,7 +9,7 @@
 # - `junk_hints` are path/text hints for pages that should usually be skipped.
 
 [site_explorer]
-max_non_homepage_pages = 5
+max_non_homepage_pages = 10
 request_timeout_seconds = 10
 page_priority = [
   "pricing_page",
@@ -17,6 +17,11 @@ page_priority = [
   "case_studies_page",
   "security_page",
   "about_page",
+  "team_page",
+  "contact_page",
+  "demo_page",
+  "help_page",
+  "support_page",
   "integrations_page",
 ]
 junk_hints = [
@@ -45,5 +50,10 @@ case_studies_page = [
   "customers",
 ]
 about_page = ["about", "company"]
+team_page = ["team", "leadership", "founders"]
+contact_page = ["contact", "email us", "talk to us"]
+demo_page = ["demo", "book demo", "request demo"]
+help_page = ["help", "help center", "knowledge base", "knowledge-base"]
+support_page = ["support", "support center", "customer support"]
 security_page = ["security", "trust", "compliance"]
 integrations_page = ["integrations", "integration", "apps", "marketplace"]

@@ -206,3 +206,93 @@ def test_merge_vendor_intelligence_keeps_stronger_deterministic_signals():
     assert merged.customers == ["Acme", "Beta"]
     assert "improve adoption" in merged.value_statements
     assert merged.confidence == "medium"
+
+
+def test_merge_vendor_intelligence_preserves_structured_case_studies_and_company_fields():
+    deterministic = VendorIntelligence(
+        vendor_name="ExampleCorp",
+        website="https://example.com",
+        company_hq="Austin, Texas",
+        contact_email="sales@example.com",
+        case_study_details=[
+            {
+                "client": "Acme",
+                "title": "Acme case study",
+                "use_case": "onboarding",
+                "value_realized": "reduced churn by 20%",
+                "source_url": "https://example.com/customers/acme",
+            }
+        ],
+        value_statements=["reduce churn"],
+    )
+    llm_result = LLMExtractionResult(
+        is_cs_relevant=True,
+        products=[
+            {
+                "name": "Journey Hub",
+                "category": "platform",
+                "description": "Guided onboarding",
+                "source_url": "https://example.com/products/journey-hub",
+            }
+        ],
+        leadership=[
+            {
+                "name": "Jane Doe",
+                "title": "CEO",
+                "source_url": "https://example.com/team",
+            }
+        ],
+        integration_categories=["crm"],
+        integrations=["Salesforce"],
+        support_signals=["help center"],
+        case_study_details=[
+            {
+                "client": "Beta",
+                "title": "Beta case study",
+                "use_case": "renewal management",
+                "value_realized": "improved renewals",
+                "source_url": "https://example.com/customers/beta",
+            }
+        ],
+        value_statements=["improve onboarding"],
+    )
+
+    merged = merge_vendor_intelligence(deterministic, llm_result)
+
+    assert merged.company_hq == "Austin, Texas"
+    assert merged.contact_email == "sales@example.com"
+    assert merged.products == [
+        {
+            "name": "Journey Hub",
+            "category": "platform",
+            "description": "Guided onboarding",
+            "source_url": "https://example.com/products/journey-hub",
+        }
+    ]
+    assert merged.leadership == [
+        {
+            "name": "Jane Doe",
+            "title": "CEO",
+            "source_url": "https://example.com/team",
+        }
+    ]
+    assert merged.integration_categories == ["crm"]
+    assert merged.integrations == ["Salesforce"]
+    assert merged.support_signals == ["help center"]
+    assert merged.case_study_details == [
+        {
+            "client": "Acme",
+            "title": "Acme case study",
+            "use_case": "onboarding",
+            "value_realized": "reduced churn by 20%",
+            "source_url": "https://example.com/customers/acme",
+        },
+        {
+            "client": "Beta",
+            "title": "Beta case study",
+            "use_case": "renewal management",
+            "value_realized": "improved renewals",
+            "source_url": "https://example.com/customers/beta",
+        },
+    ]
+    assert merged.value_statements == ["reduce churn", "improve onboarding"]

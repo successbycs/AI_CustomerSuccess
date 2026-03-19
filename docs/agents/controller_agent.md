@@ -19,7 +19,7 @@ Responsibilities:
 
 - inspect the current milestone state before starting a cycle
 - select the active milestone using the repo milestone rule
-- confirm the prompt sequence for the cycle: planner -> builder -> reviewer -> QA
+- confirm the prompt sequence for the cycle: prework -> planner -> builder -> reviewer -> QA
 - run local verification hooks through the controller utilities
 - record run history and milestone status transitions
 - trigger the `Closeout Auditor` after a milestone is marked complete
@@ -31,6 +31,7 @@ Responsibilities:
 - attach a delegated task contract to each role packet, including task ownership, read/write mode, and bounded write scope
 - keep delegation serial by default unless the controller policy explicitly allows safe parallelism
 - resume blocked parent milestones after the required capability milestone is complete
+- ensure the prework role stays read-only and is used to accelerate planning rather than to mutate milestone scope or state
 
 Guardrails:
 

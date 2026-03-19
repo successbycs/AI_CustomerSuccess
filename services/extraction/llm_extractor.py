@@ -11,7 +11,12 @@ from typing import Any, Callable
 import requests
 
 from services.config.load_config import load_pipeline_config
-from services.extraction.vendor_intel import normalize_icp_buyer_profiles
+from services.extraction.vendor_intel import (
+    normalize_case_study_details,
+    normalize_icp_buyer_profiles,
+    normalize_leadership_profiles,
+    normalize_product_profiles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +77,65 @@ LLM_RESULT_SCHEMA = {
         "free_trial": {"type": ["boolean", "null"]},
         "soc2": {"type": ["boolean", "null"]},
         "founded": {"type": "string"},
+        "products": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "category": {"type": "string"},
+                    "description": {"type": "string"},
+                    "source_url": {"type": "string"},
+                },
+                "required": ["name", "category", "description", "source_url"],
+                "additionalProperties": False,
+            },
+        },
+        "leadership": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "title": {"type": "string"},
+                    "source_url": {"type": "string"},
+                },
+                "required": ["name", "title", "source_url"],
+                "additionalProperties": False,
+            },
+        },
+        "company_hq": {"type": "string"},
+        "contact_email": {"type": "string"},
+        "integration_categories": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "integrations": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "support_signals": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
         "case_studies": {
             "type": "array",
             "items": {"type": "string"},
+        },
+        "case_study_details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "client": {"type": "string"},
+                    "title": {"type": "string"},
+                    "use_case": {"type": "string"},
+                    "value_realized": {"type": "string"},
+                    "source_url": {"type": "string"},
+                },
+                "required": ["client", "title", "use_case", "value_realized", "source_url"],
+                "additionalProperties": False,
+            },
         },
         "customers": {
             "type": "array",
@@ -97,7 +158,15 @@ LLM_RESULT_SCHEMA = {
         "free_trial",
         "soc2",
         "founded",
+        "products",
+        "leadership",
+        "company_hq",
+        "contact_email",
+        "integration_categories",
+        "integrations",
+        "support_signals",
         "case_studies",
+        "case_study_details",
         "customers",
         "value_statements",
         "confidence",
@@ -120,7 +189,15 @@ class LLMExtractionResult:
     free_trial: bool | None = None
     soc2: bool | None = None
     founded: str = ""
+    products: list[dict[str, Any]] = field(default_factory=list)
+    leadership: list[dict[str, Any]] = field(default_factory=list)
+    company_hq: str = ""
+    contact_email: str = ""
+    integration_categories: list[str] = field(default_factory=list)
+    integrations: list[str] = field(default_factory=list)
+    support_signals: list[str] = field(default_factory=list)
     case_studies: list[str] = field(default_factory=list)
+    case_study_details: list[dict[str, Any]] = field(default_factory=list)
     customers: list[str] = field(default_factory=list)
     value_statements: list[str] = field(default_factory=list)
     confidence: str = ""
@@ -236,6 +313,12 @@ def extract_vendor_intelligence(
                             "- buyer personas should reflect who the website messaging is aimed at, not generic end users\n"
                             "- icp, use_cases, case_studies, customers, and value_statements must be arrays of short strings\n"
                             "- pricing must be an array of short pricing signals like contact sales, per seat, per user, per month, or per year\n"
+                            "- products must be structured product rows with name, category, description, and source_url when the site names multiple products\n"
+                            "- leadership must capture founder/CEO/executive evidence when the site states it\n"
+                            "- company_hq and contact_email should be populated only when explicitly supported by the website evidence\n"
+                            "- integration_categories and integrations must be arrays of short strings when integrations are explicit\n"
+                            "- support_signals must capture help-center, knowledge-base, support-portal, or community/training evidence when present\n"
+                            "- case_study_details must stay separate from vendor-level value_statements and capture client, use_case, value_realized, and source_url\n"
                             "- founded should be a year or short founded string if present, else empty string\n"
                             "- booleans should be true, false, or null\n"
                             "- do not invent claims that are not supported by the evidence\n"
@@ -294,6 +377,11 @@ def _build_site_text(page_payload: dict[str, object]) -> str:
         "pricing_page",
         "case_studies_page",
         "about_page",
+        "team_page",
+        "contact_page",
+        "demo_page",
+        "help_page",
+        "support_page",
         "security_page",
         "integrations_page",
     ]
@@ -393,7 +481,15 @@ def _parse_result(content: str) -> LLMExtractionResult:
         free_trial=_normalize_optional_bool(raw_result.get("free_trial")),
         soc2=_normalize_optional_bool(raw_result.get("soc2")),
         founded=_clean_string(raw_result.get("founded")),
+        products=normalize_product_profiles(raw_result.get("products")),
+        leadership=normalize_leadership_profiles(raw_result.get("leadership")),
+        company_hq=_clean_string(raw_result.get("company_hq")),
+        contact_email=_clean_string(raw_result.get("contact_email")),
+        integration_categories=_normalize_string_list(raw_result.get("integration_categories")),
+        integrations=_normalize_string_list(raw_result.get("integrations")),
+        support_signals=_normalize_string_list(raw_result.get("support_signals")),
         case_studies=_normalize_string_list(raw_result.get("case_studies")),
+        case_study_details=normalize_case_study_details(raw_result.get("case_study_details")),
         customers=_normalize_string_list(raw_result.get("customers")),
         value_statements=_normalize_string_list(raw_result.get("value_statements")),
         confidence=confidence,

@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-03-18T12:03:42.115309+00:00",
+  "role": "planner",
+  "producer_role": "planner",
+  "phase": "planner",
+  "prompt_path": "/home/chris/projects/AI_CustomerSuccess/docs/agents/planner_agent.md",
+  "milestone": {
+    "id": "M18",
+    "title": "Vendor intelligence schema expansion and deep enrichment",
+    "status": "in_progress",
+    "dependencies": [
+      "M17"
+    ],
+    "verify": [
+      ".venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_llm_extractor.py tests/test_merge_results.py tests/test_site_explorer.py tests/test_vendor_profile_builder.py tests/test_supabase_client.py",
+      ".venv/bin/python scripts/check_supabase.py",
+      "Review supabase/core_persistence_schema.sql, services/extraction/vendor_intel.py, services/extraction/llm_extractor.py, services/enrichment/site_explorer.py, and the relevant export/admin surfaces",
+      "Verify the schema and docs clearly distinguish vendor value statements from structured case-study realized value",
+      "Verify the schema/processing rules normalize websites and emails into canonical valid formats before persistence"
+    ],
+    "section_text": "## M18 Vendor intelligence schema expansion and deep enrichment\nStatus: `in_progress`\n\nObjective:\nDeepen the product from a basic AI-in-CS vendor directory into a richer lead-magnet intelligence asset by expanding the vendor schema, hardening field normalization, and extracting more specific commercial evidence from vendor websites. This milestone now explicitly includes defining and implementing a superset vendor-intelligence schema based on real vendor-site evidence from platforms such as Gainsight.\n\nAcceptance criteria:\n- A repo-owned superset schema contract exists for rich vendor intelligence, covering:\n  - core vendor identity and canonical web/contact fields\n  - product and use-case structure\n  - buyer personas and broad ICP\n  - leadership/founder/company metadata\n  - support/help/demo surfaces\n  - categorized integrations\n  - structured proof tables such as case studies and later search-visibility evidence\n- The vendor data model supports both broad ICP and buyer-oriented ICP (`icp_buyer`)\n- Case studies are no longer treated as flat proof labels only; the system can store structured case-study evidence with client, use case, value realized, and source reference\n- Vendor-level value statements remain separate from case-study-specific realized value\n- Website exploration explicitly covers the pages most likely to contain enrichment signals, including `about`, `team`, `contact`, `demo`, and help/support surfaces where available\n- The schema and extraction model support additional company intelligence fields such as founder/CEO details, headquarters/contact details, demo URL, help-center URL, and categorized integrations\n- The schema and processing layer enforce canonical formatting and validation for website URLs and email addresses before persistence\n- The system can extract and persist richer product/commercial fields needed for the directory and lead-magnet workflow, including integration categories, pricing model, free-trial detail, support/customer-success signals, and company metadata\n- The implementation plan for later expansion remains explicit for deferred fields such as Product Hunt ingestion, Trustpilot/G2 enrichment depth, funding/news enrichment, and knowledge-base chat use cases when they are not fully completed in this milestone\n- The schema design is informed by real multi-product CS vendors, so it can represent examples like:\n  - multiple products under one vendor\n  - multiple buyer personas\n  - executive leadership and founder information\n  - support/docs/help-center URLs\n  - structured customer-story outcomes\n  - categorized integrations and ecosystem signals\n\nVerification:\n- `.venv/bin/python -m pytest tests/test_vendor_intel_extraction.py tests/test_llm_extractor.py tests/test_merge_results.py tests/test_site_explorer.py tests/test_vendor_profile_builder.py tests/test_supabase_client.py`\n- `.venv/bin/python scripts/check_supabase.py`\n- Review `supabase/core_persistence_schema.sql`, `services/extraction/vendor_intel.py`, `services/extraction/llm_extractor.py`, `services/enrichment/site_explorer.py`, and the relevant export/admin surfaces\n- Review the superset schema design against a real reference vendor such as Gainsight to confirm it supports multi-product, multi-buyer, leadership, help/support, integration, and case-study structures\n- Verify the schema and docs clearly distinguish vendor value statements from structured case-study realized value\n- Verify the schema/processing rules normalize websites and emails into canonical valid formats before persistence"
+  },
+  "current_focus": "M18",
+  "context_files": [
+    "docs/product_design.md",
+    "docs/architecture.md",
+    "docs/codex_guardrails.md",
+    "docs/implementation_plan.md",
+    "README.md",
+    "config/pipeline_config.json",
+    "config/scheduler.toml"
+  ],
+  "changed_files": [
+    "docs/implementation_plan.md",
+    "docs/project_brain.md",
+    "milestone_registry.json",
+    "project_state.json"
+  ],
+  "artifact_checks": [],
+  "available_tools": [],
+  "delegation_contract": {
+    "task_id": "cycle-20260318T120341Z:M18:planner",
+    "role": "planner",
+    "milestone": "M18",
+    "execution_mode": "read_only",
+    "read_only": true,
+    "parallel_allowed": false,
+    "max_parallel_tasks": 1,
+    "require_declared_write_scope": true,
+    "stop_on_scope_violation": true,
+    "write_scope": [],
+    "allowed_tool_ids": [],
+    "ownership_note": "planner owns only this read_only task for M18",
+    "rules": [
+      "Use only the declared role packet, repo state, and allowed tools for this task.",
+      "Do not touch files outside the declared write scope.",
+      "Do not duplicate work owned by another role in the same cycle.",
+      "Stop and surface a blocker when the task requires out-of-scope writes or undeclared tool access.",
+      "This role is read-only and must not change repo files or remote state."
+    ]
+  },
+  "history_evidence": {
+    "verify": null,
+    "review": null,
+    "qa": null
+  },
+  "autonomy_state": {
+    "recommended_next_action": "start_iteration",
+    "reason": "no verification has been recorded yet for this milestone",
+    "retry_count": 0,
+    "max_retries": 2,
+    "failure_kind": ""
+  },
+  "checklist": [
+    "Restate the objective for M18",
+    "List acceptance criteria and proof requirements",
+    "Identify files likely to change",
+    "Identify tests to add or update",
+    "List manual/runtime checks required before closure"
+  ],
+  "runner_mode": "external_local_ai_cli",
+  "notes": "This runner generates structured local packets and can optionally invoke a local AI CLI.",
+  "cycle_id": "cycle-20260318T120341Z",
+  "backend": "openai",
+  "model": "gpt-5.4",
+  "result": {
+    "status": "in_progress",
+    "summary": "Planner packet for M18 is coherent, but no implementation or verification evidence is recorded yet; milestone should remain in progress pending code/schema work and required test/manual validation.",
+    "issues": [
+      "No verification results recorded in history_evidence",
+      "Changed files are planning/state docs only; no schema or service implementation files updated yet",
+      "Required manual reviews for schema distinctions and canonical normalization have not been completed",
+      "Read-only planner packet cannot complete milestone work or verification"
+    ],
+    "manual_checks_required": true,
+    "manual_checks_complete": false
+  },
+  "cli_command": ".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+}
