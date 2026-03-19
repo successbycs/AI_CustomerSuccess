@@ -95,9 +95,9 @@ The current codebase follows the MVP pipeline described in `docs/product_design.
 The repo now includes an autonomous milestone-control doc set:
 
 - `docs/implementation_plan.md` tracks current progress and remaining milestones
-- `docs/autonomous_dev_loop.md` defines the controller -> planner -> builder -> reviewer -> QA milestone loop
+- `docs/autonomous_dev_loop.md` defines the controller -> prework -> planner -> builder -> reviewer -> QA milestone loop
 - `docs/autonomous_kickoff_prompt.md` provides the reusable kickoff prompt for each milestone cycle
-- `docs/agents/` contains reusable prompts for the controller, planner, builder, reviewer, QA, closeout-auditor, and backfill-auditor roles
+- `docs/agents/` contains reusable prompts for the controller, prework, planner, builder, reviewer, QA, closeout-auditor, and backfill-auditor roles
 - `docs/codex_guardrails.md` defines implementation constraints for autonomous work
 - `docs/audit/audit.md` is the persistent audit log for milestone closeout and backfill reviews
 - `project_state.json`, `milestone_registry.json`, and `runs/run_history.json` provide local cycle state
@@ -137,14 +137,16 @@ Operator-facing control-plane summary:
 
 - `scripts/autonomous_controller.py` is the controller. It selects the active milestone, records verification/review/QA state, and decides whether completion is allowed.
 - after `complete`, the controller now triggers the `Closeout Auditor` automatically and appends its entry to `docs/audit/audit.md` when an OpenAI audit backend is available
+- when an audit backend is available, a failed closeout audit now reverts milestone completion instead of leaving the milestone closed with a failed audit
 - the `Backfill Auditor` is a manual controller command for completed milestones that do not yet have an audit entry
 - `scripts/autonomous_controller.py next-action` tells you whether the milestone should retry, move to review/QA, stop on an external blocker, or complete.
 - the controller now reports datastore capability state in `status` and hard-blocks schema-admin milestones like `M15` when no DB-admin path is configured
-- `planner`, `builder`, `reviewer`, and `qa` are separate role phases. Their prompt files live under `docs/agents/`.
+- `prework`, `planner`, `builder`, `reviewer`, and `qa` are separate role phases. Their prompt files live under `docs/agents/`.
 - `scripts/local_agent_runner.py` creates one role packet per phase and sends that packet to the configured backend when `AUTONOMOUS_AGENT_CLI` is set.
 - A role packet is the saved JSON handoff for one phase. It contains the milestone context, changed files, artifact checks, recent history evidence, and the role result.
 - Role packets now also include a delegated task contract with `task_id`, execution mode, bounded write scope, and allowed tool ids.
 - Role packets now also include the controller’s retry state so planner/builder can see whether the current iteration is a fresh pass, a retry, or an externally blocked stop condition.
+- The `prework` role is read-only and exists to accelerate the next implementation pass with a current gap map, likely file-touch list, and verification-focused prep summary.
 - Role packets are written to `runs/agent_outputs/` and run-history events are written to `runs/run_history.json`.
 - Attribution is explicit in both places. Packets and history entries now include `producer_role`, `phase`, `backend`, `model`, and `cycle_id`.
 - Delegated execution is serial by default through `project_state.json` delegation policy; parallel work should remain opt-in and read-only unless write-scope isolation is explicit.

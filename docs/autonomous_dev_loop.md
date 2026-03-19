@@ -24,9 +24,21 @@ Use the milestone list in `docs/implementation_plan.md`.
 2. Otherwise, select the lowest-numbered `not_started` milestone.
 3. Do not skip ahead unless a human explicitly redirects the work.
 
-## Core Five-Role Execution Pattern
+## Core Six-Role Execution Pattern
 
-### 1. Controller
+### 1. Prework
+
+The prework role prepares bounded milestone context before planning and implementation.
+
+Prework responsibilities:
+
+- inspect the selected milestone and identify the likely schema, service, export, doc, and test surfaces
+- identify reusable blockers, dependency gaps, and likely verification pain points before the planner starts
+- gather read-only tool evidence when declared tools are relevant
+- produce a concise prep summary that reduces rediscovery work for the planner and builder
+- remain read-only and avoid changing milestone state or repo files directly
+
+### 2. Controller
 
 The controller orchestrates the cycle.
 
@@ -35,6 +47,7 @@ Controller responsibilities:
 - select the active milestone from the local state files
 - stop early if dependencies or required state are missing
 - invoke the local cycle wrapper and verification commands
+- confirm the prompt sequence for the cycle: prework -> planner -> builder -> reviewer -> QA
 - record milestone transitions and run history
 - treat prompt docs as execution inputs for a local runner, not as implicit automation
 - classify failed verification results as actionable-internal vs external-blocker
@@ -44,20 +57,21 @@ Controller responsibilities:
 - resume the blocked parent milestone after the capability milestone is complete
 - expose declared `tools/` capabilities to roles through controller-owned packets and access rules
 
-### 2. Planner
+### 3. Planner
 
 The planner confirms the milestone scope before implementation starts.
 
 Planner responsibilities:
 
 - restate the milestone objective and acceptance criteria
+- incorporate the prework output before finalizing scope, files, tests, and proof
 - identify likely changed files, tests, and verification commands
 - call out blockers, dependencies, and proof requirements
 - keep the builder from drifting into adjacent milestones
 - identify whether the milestone requires declared tools from `tools/`
 - use repo-owned direct tooling when a milestone needs tool access
 
-### 3. Builder
+### 4. Builder
 
 The builder implements the selected milestone.
 
@@ -71,7 +85,7 @@ Builder responsibilities:
 - run the relevant tests and verification commands
 - report changed files, risks, and next step
 
-### 4. Reviewer
+### 5. Reviewer
 
 The reviewer checks whether the implementation is actually aligned with the architecture and guardrails.
 
@@ -82,7 +96,7 @@ Reviewer responsibilities:
 - identify doc drift, hidden risks, and silent failure paths
 - decide whether the milestone is really complete or just feature-present
 
-### 5. QA
+### 6. QA
 
 The QA pass verifies runtime behavior, artifacts, and failure handling.
 
@@ -100,6 +114,7 @@ The audit roles run after milestone completion or retrospectively across older m
 ### Closeout Auditor
 
 The closeout auditor runs immediately after the controller marks a milestone complete.
+When an audit backend is available, the completion should stand only if the closeout audit succeeds.
 
 Responsibilities:
 
@@ -174,6 +189,7 @@ Milestone selection rule:
 3. Do not skip ahead unless explicitly instructed by the human.
 
 Execution rules:
+- Start each implementation iteration with the prework role so the cycle has a current gap map, file-touch map, and verification plan.
 - Keep changes bounded to the selected milestone.
 - Update any docs made stale by the implementation before closing the milestone.
 - Add or update tests whenever behavior changes.
@@ -221,8 +237,9 @@ Execution model:
 - `scripts/autonomous_controller.py` manages local milestone state and verification history
 - `scripts/autonomous_controller.py auto-iterate` is the controller-owned bounded inner loop for same-milestone retries
 - `scripts/run_autonomous_cycle.sh` chains the local controller checks via subprocess
-- if `AUTONOMOUS_AGENT_RUNNER` is configured, `scripts/run_autonomous_cycle.sh` will invoke that local executable for `planner -> builder -> reviewer -> QA`
-- if `AUTONOMOUS_AGENT_RUNNER` is not configured, `scripts/local_agent_runner.py` generates structured local role packets for `planner -> builder -> reviewer -> QA`
+- if `AUTONOMOUS_AGENT_RUNNER` is configured, `scripts/run_autonomous_cycle.sh` will invoke that local executable for `prework -> planner -> builder -> reviewer -> QA`
+- if `AUTONOMOUS_AGENT_RUNNER` is not configured, `scripts/local_agent_runner.py` generates structured local role packets for `prework -> planner -> builder -> reviewer -> QA`
+- `docs/agents/prework_agent.md` defines the read-only prep phase that accelerates later roles by mapping likely changes, blockers, and proof requirements
 - `M13B` is the milestone that tracks real local AI backend integration for `AUTONOMOUS_AGENT_CLI`
 - `scripts/openai_agent_cli.py` is the repo-native OpenAI adapter for `AUTONOMOUS_AGENT_CLI`
 - `M13C` is the milestone that defines the reusable `tools/` registry pattern, role-based tool access, and the first `tools/supabase/` capability

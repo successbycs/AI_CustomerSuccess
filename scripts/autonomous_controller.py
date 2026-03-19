@@ -634,7 +634,19 @@ def history_actor_metadata(action: str) -> dict[str, Any]:
     """Return attribution metadata for one history action."""
     metadata_map = {
         "verify": {"producer_role": "controller", "phase": "controller", "backend": "local_controller", "model": None},
+        "complete_pending_audit": {
+            "producer_role": "controller",
+            "phase": "controller",
+            "backend": "local_controller",
+            "model": None,
+        },
         "complete": {"producer_role": "controller", "phase": "controller", "backend": "local_controller", "model": None},
+        "complete_reverted": {
+            "producer_role": "controller",
+            "phase": "controller",
+            "backend": "local_controller",
+            "model": None,
+        },
         "fail": {"producer_role": "controller", "phase": "controller", "backend": "local_controller", "model": None},
         "review": {"producer_role": "reviewer", "phase": "reviewer", "backend": "local_controller", "model": None},
         "qa": {"producer_role": "qa", "phase": "qa", "backend": "local_controller", "model": None},
@@ -877,13 +889,19 @@ def failed_verify_attempt_count(
 ) -> int:
     """Return the number of failed verify attempts for a milestone."""
     count = 0
+    cycle_specific_count = 0
+    saw_cycle_entries = False
     for entry in run_history:
         if entry.get("action") != "verify" or entry.get("milestone") != milestone_id:
             continue
-        if cycle_id and entry.get("cycle_id") != cycle_id:
-            continue
         if not entry.get("success"):
             count += 1
+        if cycle_id and entry.get("cycle_id") == cycle_id:
+            saw_cycle_entries = True
+            if not entry.get("success"):
+                cycle_specific_count += 1
+    if cycle_id and saw_cycle_entries:
+        return cycle_specific_count
     return count
 
 
@@ -1244,7 +1262,7 @@ def command_status(root: Path = PROJECT_ROOT) -> int:
     current_focus = str(project_state.get("current_focus") or "").strip()
     if current_focus:
         print("Latest role outputs:")
-        for role in ("planner", "builder", "reviewer", "qa"):
+        for role in ("prework", "planner", "builder", "reviewer", "qa"):
             output = latest_role_output(root, current_focus, role)
             if output is None:
                 print(f"- {role}: none")
@@ -1491,6 +1509,14 @@ def command_complete(milestone_id: str, root: Path = PROJECT_ROOT) -> int:
     registry_payload, milestones = load_milestone_registry(root)
     get_milestone_by_id(milestones, milestone_id)
     run_history = load_run_history(root)
+    original_registry_payload = json.loads(json.dumps(registry_payload))
+    original_project_state = json.loads(json.dumps(project_state))
+    implementation_plan_path = root / "docs" / "implementation_plan.md"
+    original_implementation_plan = (
+        implementation_plan_path.read_text(encoding="utf-8") if implementation_plan_path.exists() else None
+    )
+    project_brain_path = root / "docs" / "project_brain.md"
+    original_project_brain = project_brain_path.read_text(encoding="utf-8") if project_brain_path.exists() else None
 
     latest_verify = latest_history_entry(run_history, action="verify", milestone_id=milestone_id)
     latest_review = latest_history_entry(run_history, action="review", milestone_id=milestone_id)
@@ -1525,6 +1551,41 @@ def command_complete(milestone_id: str, root: Path = PROJECT_ROOT) -> int:
 
     append_run_history(
         build_history_entry(
+            action="complete_pending_audit",
+            milestone=milestone_id,
+            command=f"complete {milestone_id}",
+            exit_code=0,
+            success=True,
+            note="milestone marked complete pending closeout audit",
+        ),
+        root,
+    )
+
+    audit_result = trigger_closeout_audit(milestone_id, root)
+    if audit_result["status"] == "failed":
+        save_json(root / "milestone_registry.json", original_registry_payload)
+        save_json(root / "project_state.json", original_project_state)
+        if original_implementation_plan is not None:
+            implementation_plan_path.write_text(original_implementation_plan, encoding="utf-8")
+        if original_project_brain is not None:
+            project_brain_path.write_text(original_project_brain, encoding="utf-8")
+        append_run_history(
+            build_history_entry(
+                action="complete_reverted",
+                milestone=milestone_id,
+                command=f"complete {milestone_id}",
+                exit_code=1,
+                success=False,
+                note=f"milestone completion reverted because closeout audit failed: {audit_result['note']}",
+            ),
+            root,
+        )
+        raise RuntimeError(
+            f"Milestone {milestone_id} completion was reverted because the closeout audit failed: {audit_result['note']}"
+        )
+
+    append_run_history(
+        build_history_entry(
             action="complete",
             milestone=milestone_id,
             command=f"complete {milestone_id}",
@@ -1540,19 +1601,15 @@ def command_complete(milestone_id: str, root: Path = PROJECT_ROOT) -> int:
         print(f"Current focus updated to {next_milestone['id']}.")
     else:
         print("No unfinished milestone remains.")
-
-    audit_result = trigger_closeout_audit(milestone_id, root)
     if audit_result["status"] in {"appended", "generated"}:
         print(f"Closeout audit recorded for {milestone_id}: {audit_result['audit_path']}")
-    elif audit_result["status"] == "skipped":
-        print(f"Closeout audit skipped for {milestone_id}: {audit_result['note']}")
     else:
-        print(f"Closeout audit failed for {milestone_id}: {audit_result['note']}")
+        print(f"Closeout audit skipped for {milestone_id}: {audit_result['note']}")
     return 0
 
 
 def trigger_closeout_audit(milestone_id: str, root: Path = PROJECT_ROOT) -> dict[str, Any]:
-    """Run a post-completion audit without blocking milestone completion."""
+    """Run a post-completion audit, returning failed only for real audit failures."""
     try:
         result = milestone_auditor.run_audit(root, milestone_id, "closeout", append=True)
         append_run_history(
@@ -1701,7 +1758,7 @@ def command_fail(milestone_id: str, note: str, root: Path = PROJECT_ROOT) -> int
 
 
 def command_run_cycle(root: Path = PROJECT_ROOT) -> int:
-    """Print the next milestone and the planner/builder/reviewer/QA prompt sequence."""
+    """Print the next milestone and the role prompt sequence."""
     _, milestones = load_milestone_registry(root)
     milestone, incomplete_dependencies = determine_next_milestone(milestones)
     if milestone is None:
@@ -1719,13 +1776,14 @@ def command_run_cycle(root: Path = PROJECT_ROOT) -> int:
     print(f"- {controller_prompt} [{controller_state}]")
 
     prompt_paths = [
+        root / "docs" / "agents" / "prework_agent.md",
         root / "docs" / "agents" / "planner_agent.md",
         root / "docs" / "agents" / "builder_agent.md",
         root / "docs" / "agents" / "reviewer_agent.md",
         root / "docs" / "agents" / "qa_agent.md",
     ]
     print("Prompt sequence:")
-    for label, path in zip(("Planner", "Builder", "Reviewer", "QA"), prompt_paths):
+    for label, path in zip(("Prework", "Planner", "Builder", "Reviewer", "QA"), prompt_paths):
         state = "present" if path.exists() else "missing"
         print(f"- {label}: {path} [{state}]")
 
@@ -1797,6 +1855,7 @@ def command_auto_iterate(
 
         if decision["action"] in {"start_iteration", "retry_same_milestone"}:
             before_evidence = repo_evidence(root)
+            prework_result = run_role_phase(root, target_milestone, "prework")
             planner_result = run_role_phase(root, target_milestone, "planner")
             builder_result = run_role_phase(root, target_milestone, "builder")
             after_evidence = repo_evidence(root)
@@ -1806,21 +1865,22 @@ def command_auto_iterate(
                         action="iteration_step",
                         milestone=target_milestone,
                         command=f"auto-iterate {target_milestone}",
-                        exit_code=0 if planner_result["success"] and builder_result["success"] else 1,
-                        success=planner_result["success"] and builder_result["success"],
-                        note=f"planner/builder iteration {iteration_index}",
+                        exit_code=0 if prework_result["success"] and planner_result["success"] and builder_result["success"] else 1,
+                        success=prework_result["success"] and planner_result["success"] and builder_result["success"],
+                        note=f"prework/planner/builder iteration {iteration_index}",
                     ),
                     "iteration_index": iteration_index,
                     "decision": decision,
                     "before_evidence": before_evidence,
                     "after_evidence": after_evidence,
+                    "prework_result": prework_result,
                     "planner_result": planner_result,
                     "builder_result": builder_result,
                 },
                 root,
             )
-            if not planner_result["success"] or not builder_result["success"]:
-                raise RuntimeError("Planner or builder phase failed during auto-iterate")
+            if not prework_result["success"] or not planner_result["success"] or not builder_result["success"]:
+                raise RuntimeError("Prework, planner, or builder phase failed during auto-iterate")
             command_verify(root)
             continue
 

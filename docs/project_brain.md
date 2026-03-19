@@ -32,21 +32,25 @@ This file is a short operational memory for the repository. It should stay conci
 
 ## Current Operating Assumptions
 
+- current active milestone is `M18`
+
+
+
 - milestone order is controlled by `milestone_registry.json`
 - `current_focus` in `project_state.json` is the active milestone for controller commands
 - `controller_policy` in `project_state.json` controls same-milestone retry limits and stop conditions
 - `delegation_policy` in `project_state.json` controls delegated task contracts, write-scope requirements, and default serial execution
 - milestone closure requires verification plus recorded review and QA outcomes
-- milestone completion should trigger the `Closeout Auditor`, which appends one audit entry to `docs/audit/audit.md`
+- milestone completion should trigger the `Closeout Auditor`; when an audit backend is available, completion should stand only if the closeout audit succeeds
 - historical audit gaps are filled by the manual `Backfill Auditor`
-- `AUTONOMOUS_AGENT_RUNNER` is optional; without it, `scripts/local_agent_runner.py` generates structured local role packets for planner, builder, reviewer, and QA
+- `AUTONOMOUS_AGENT_RUNNER` is optional; without it, `scripts/local_agent_runner.py` generates structured local role packets for prework, planner, builder, reviewer, and QA
 - `AUTONOMOUS_AGENT_CLI` can point at a local AI CLI that reads JSON from stdin and returns JSON on stdout; the repo-native runner will capture that structured result
 - `scripts/openai_agent_cli.py` is the default repo-native example for wiring the control plane to the OpenAI API
-- `M13B` is complete; `M13C` is also complete
-- current active milestone is `M18`
+- `M13B`, `M13C`, `M13D`, and `M13E` are complete
 - `supabase/core_persistence_schema.sql` is now the repo-owned schema contract for the core Supabase tables used by exports, candidate persistence, and run tracking
 - `M13C` defines the reusable repo pattern for `tools/`, tool registry schema, role-based tool access, and the first `tools/supabase/` capability layer
 - `M13D` is the follow-on capability milestone that makes the Supabase tool executable through direct repo-owned access
+- `M13E` adds a read-only prework phase ahead of planner/builder so each iteration starts with a current gap map and verification-focused prep summary
 - role packets should include declared tools for the current milestone and role when the registry is present
 - normal product runs are expected to use LLM extraction by default when configuration is valid; deterministic extraction is the resilience fallback and should remain visible to operators when used
 
@@ -64,6 +68,7 @@ This file is a short operational memory for the repository. It should stay conci
 - `M16` is complete; a fresh runtime pass regenerated outputs, served the preview surfaces, and kept warnings visible instead of silent
 - `M18` is now the active product milestone for richer vendor intelligence: buyer ICP, structured case studies, leadership/contact metadata, categorized integrations, stronger field normalization, and a Gainsight-style superset vendor schema contract
 - `M19` is queued after `M18` to persist role-based Google/GEO query sets and ranked vendor visibility results by buyer persona
-- `M20` through `M31` now capture the next product expansion arc: structured case studies, leadership/contact intelligence, canonical identity validation, buyer search intent, lead-magnet conversion, code-owned editorial governance, multi-product modeling, integration taxonomy, render proof, proof artifact persistence, external enrichment connectors, and help-center detection
+- `M20` through `M31` now capture the next product expansion arc: structured case studies, leadership/contact intelligence, canonical identity validation, buyer search intent, lead-magnet conversion, lead capture and follow-up operations, code-owned editorial governance, multi-product modeling, integration taxonomy, render proof, proof artifact persistence, external enrichment connectors, and help-center detection
 - `M32` is reserved for the change/update/enhancement pipeline and a dedicated `Solution Enhancement` agent so future requests enter the milestone system cleanly
+- `M33` is reserved for adding `n8n` to the repo tool layer as a controlled development tool
 - the controller now distinguishes actionable retryable failures from external blockers instead of stopping at generic verification failure

@@ -167,6 +167,7 @@ def test_complete_command_updates_registry_and_focus(tmp_path: Path):
     assert registry["milestones"][1]["status"] == "complete"
     assert project_state["current_focus"] == "M03"
     assert any(entry["action"] == "complete" for entry in history)
+    assert any(entry["action"] == "complete_pending_audit" for entry in history)
 
 
 def test_fail_command_updates_registry_and_history(tmp_path: Path):
@@ -214,6 +215,7 @@ def test_verify_initializes_missing_run_history(monkeypatch, tmp_path: Path):
 def test_run_cycle_reports_controller_and_prompt_sequence(tmp_path: Path, capsys):
     create_state_files(tmp_path)
     create_file(tmp_path, "docs/agents/controller_agent.md")
+    create_file(tmp_path, "docs/agents/prework_agent.md")
     create_file(tmp_path, "docs/agents/planner_agent.md")
     create_file(tmp_path, "docs/agents/builder_agent.md")
     create_file(tmp_path, "docs/agents/reviewer_agent.md")
@@ -225,6 +227,7 @@ def test_run_cycle_reports_controller_and_prompt_sequence(tmp_path: Path, capsys
     assert exit_code == 0
     assert "Controller:" in output
     assert "Prompt sequence:" in output
+    assert "Prework:" in output
     assert "Planner:" in output
     assert "QA:" in output
     assert "record review:" in output
@@ -460,6 +463,7 @@ def test_auto_iterate_records_iteration_and_blocks_on_external_failure(monkeypat
     registry = load_json(tmp_path / "milestone_registry.json")
     assert exit_code == 0
     assert any(entry["action"] == "iteration_step" for entry in history)
+    assert history[-2]["prework_result"]["role"] == "prework"
     assert history[-1]["action"] == "fail"
     assert registry["milestones"][1]["status"] == "blocked"
 
@@ -539,6 +543,53 @@ def test_complete_triggers_closeout_audit_and_records_history(monkeypatch, tmp_p
     history = load_json(tmp_path / "runs" / "run_history.json")
     assert exit_code == 0
     assert any(entry["action"] == "complete" for entry in history)
+    assert any(entry["action"] == "complete_pending_audit" for entry in history)
+
+
+def test_complete_reverts_when_closeout_audit_fails(monkeypatch, tmp_path: Path):
+    create_state_files(tmp_path)
+    create_file(
+        tmp_path,
+        "docs/implementation_plan.md",
+        "## M01 Discovery foundation\nStatus: `complete`\n\n"
+        "## M02 Two-phase pipeline\nStatus: `in_progress`\n\n"
+        "## M03 Bounded website exploration\nStatus: `not_started`\n",
+    )
+    create_file(
+        tmp_path,
+        "docs/project_brain.md",
+        "# Project Brain\n\n## Current Operating Assumptions\n\n- current active milestone is `M02`\n",
+    )
+    monkeypatch_verify_success(tmp_path)
+    autonomous_controller.command_review("M02", "pass", "review passed", tmp_path)
+    autonomous_controller.command_qa("M02", "pass", "qa passed", False, [], tmp_path)
+    monkeypatch.setattr(
+        autonomous_controller,
+        "trigger_closeout_audit",
+        lambda milestone_id, root=tmp_path: {
+            "status": "failed",
+            "audit_path": str(root / "docs" / "audit" / "audit.md"),
+            "note": "backend returned a failed audit",
+        },
+    )
+
+    try:
+        autonomous_controller.command_complete("M02", tmp_path)
+    except RuntimeError as error:
+        assert "completion was reverted" in str(error)
+    else:
+        raise AssertionError("command_complete should revert when closeout audit fails")
+
+    registry = load_json(tmp_path / "milestone_registry.json")
+    project_state = load_json(tmp_path / "project_state.json")
+    history = load_json(tmp_path / "runs" / "run_history.json")
+    plan_text = (tmp_path / "docs" / "implementation_plan.md").read_text(encoding="utf-8")
+    brain_text = (tmp_path / "docs" / "project_brain.md").read_text(encoding="utf-8")
+    assert registry["milestones"][1]["status"] == "in_progress"
+    assert project_state["current_focus"] == "M02"
+    assert history[-1]["action"] == "complete_reverted"
+    assert "Status: `in_progress`" in plan_text
+    assert "current active milestone is `M02`" in brain_text
 
 
 def test_complete_syncs_implementation_plan_and_project_brain(tmp_path: Path):
