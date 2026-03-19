@@ -35,6 +35,8 @@ FILE_SPECS = (
     ("config/pipeline_config.json", "runtime", True, True),
     ("supabase/core_persistence_schema.sql", "runtime", True, False),
     ("tools/tool_registry.json", "runtime", True, True),
+    ("tools/agent_cli/tool_spec.json", "runtime", True, True),
+    ("tools/agent_cli/cli.py", "runtime", True, False),
     ("tools/supabase/tool_spec.json", "runtime", True, True),
     ("tools/supabase/cli.py", "runtime", True, False),
     ("scripts/verify_project.sh", "runtime", True, False),

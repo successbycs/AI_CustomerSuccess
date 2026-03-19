@@ -256,7 +256,10 @@ def backend_metadata(cli_command: str | None) -> dict[str, Any]:
         return {"backend": "repo_native_packet", "model": None}
 
     tokens = shlex.split(cli_command)
-    if any(token.endswith("openai_agent_cli.py") for token in tokens):
+    if any(
+        token.endswith("openai_agent_cli.py") or token.endswith("tools/agent_cli/cli.py")
+        for token in tokens
+    ):
         model = None
         for index, token in enumerate(tokens):
             if token == "--model" and index + 1 < len(tokens):
@@ -276,7 +279,12 @@ def resolve_cli_command(cli_command: str, *, execution_root: Path) -> str:
         return cli_command
 
     for index, token in enumerate(tokens):
-        if token.startswith("./") or token.startswith(".venv/") or token.startswith("scripts/"):
+        if (
+            token.startswith("./")
+            or token.startswith(".venv/")
+            or token.startswith("scripts/")
+            or token.startswith("tools/")
+        ):
             tokens[index] = str((execution_root / token).resolve())
     return shlex.join(tokens)
 
@@ -422,6 +430,12 @@ def create_role_packet(
         try:
             packet["result"] = run_local_ai_cli(cli_command=effective_cli, packet=packet, root=root)
             packet["cli_command"] = effective_cli
+            result_backend = str(packet["result"].get("backend") or "").strip()
+            if result_backend:
+                packet["backend"] = result_backend
+            result_model = str(packet["result"].get("model") or "").strip()
+            if result_model:
+                packet["model"] = result_model
             if not changed_files and not delegation_contract["read_only"]:
                 packet["changed_files"] = collect_changed_files(root)
             packet["artifact_checks"] = [

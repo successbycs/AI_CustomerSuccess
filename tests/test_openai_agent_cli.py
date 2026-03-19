@@ -70,7 +70,7 @@ def test_normalize_result_defaults_invalid_status():
     assert result["issues"] == ["gap detected"]
 
 
-def test_call_builder_agent_uses_codex_exec_and_parses_last_message(monkeypatch, tmp_path: Path):
+def test_call_codex_agent_uses_codex_exec_and_parses_last_message(monkeypatch, tmp_path: Path):
     captured: dict[str, object] = {}
 
     def fake_run(command, *, capture_output, text, check):
@@ -94,10 +94,19 @@ def test_call_builder_agent_uses_codex_exec_and_parses_last_message(monkeypatch,
     monkeypatch.setattr(openai_agent_cli.subprocess, "run", fake_run)
     monkeypatch.chdir(tmp_path)
 
-    result = openai_agent_cli.call_builder_agent({"role": "builder", "milestone": {"id": "M19"}}, model="gpt-5.4")
+    result = openai_agent_cli.call_codex_agent({"role": "builder", "milestone": {"id": "M19"}}, model="gpt-5.4")
 
     assert result["status"] == "in_progress"
     assert result["summary"] == "builder changed files"
     assert result["backend"] == "codex_exec"
+    assert result["model"] == "gpt-5.4"
     assert captured["command"][0] == "/usr/bin/codex"
     assert "--output-schema" in captured["command"]
+
+
+def test_should_use_codex_can_enable_all_roles(monkeypatch):
+    monkeypatch.setenv("AUTONOMOUS_AGENTIC_ROLES", "all")
+
+    assert openai_agent_cli.should_use_codex({"role": "planner"}) is True
+    assert openai_agent_cli.should_use_codex({"role": "reviewer"}) is True
+    assert openai_agent_cli.should_use_codex({"role": "qa"}) is True

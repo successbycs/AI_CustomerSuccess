@@ -18,6 +18,16 @@ DEFAULT_MODEL = "gpt-5.4"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_CODEX_COMMAND = "codex"
+DEFAULT_AGENTIC_ROLES = {"builder"}
+ALL_AGENTIC_ROLES = {
+    "prework",
+    "planner",
+    "builder",
+    "reviewer",
+    "qa",
+    "closeout_auditor",
+    "backfill_auditor",
+}
 ROLE_RESULT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -109,6 +119,34 @@ def build_builder_prompt(packet: dict[str, Any]) -> str:
     )
 
 
+def build_agentic_role_prompt(packet: dict[str, Any]) -> str:
+    """Build a role prompt for Codex-backed repo-aware execution."""
+    role = str(packet.get("role") or "unknown").strip().lower()
+    read_only = bool(packet.get("delegation_contract", {}).get("read_only", False))
+    role_rules = [
+        "Inspect the repository directly before returning your result.",
+        "Respect the milestone acceptance criteria, the delegated task contract, the available tools, and the role checklist in the packet.",
+        "Keep your work bounded to the declared write scope and stop if the task requires out-of-scope changes.",
+        "Run only the verification commands that are appropriate for this role and the evidence available in the repo.",
+    ]
+    if read_only:
+        role_rules.append("This role is read-only. Do not modify repository files.")
+    else:
+        role_rules.append("This role may modify repository files, but only within the declared write scope.")
+
+    return (
+        f"You are the {role} role in a milestone-driven software delivery loop.\n"
+        + "\n".join(f"- {rule}" for rule in role_rules)
+        + "\nReturn exactly one JSON object with keys: "
+        "status, summary, issues, manual_checks_required, manual_checks_complete.\n"
+        "status must be one of: pass, fail, in_progress, blocked.\n"
+        "summary must be concise and concrete.\n"
+        "issues must be a JSON array of short strings.\n"
+        "manual_checks_required and manual_checks_complete must be booleans.\n\n"
+        f"{json.dumps(packet, indent=2)}"
+    )
+
+
 def extract_response_text(payload: dict[str, Any]) -> str:
     """Extract plain text from a Responses API payload."""
     output_text = payload.get("output_text")
@@ -165,8 +203,33 @@ def codex_command() -> str:
     return resolved
 
 
-def call_builder_agent(packet: dict[str, Any], *, model: str) -> dict[str, Any]:
-    """Run the builder role through Codex CLI so it can actually modify the repo."""
+def configured_agentic_roles() -> set[str]:
+    """Return the role set that should run through Codex."""
+    raw_value = str(os.environ.get("AUTONOMOUS_AGENTIC_ROLES", "")).strip().lower()
+    if not raw_value:
+        return set(DEFAULT_AGENTIC_ROLES)
+    if raw_value == "all":
+        return set(ALL_AGENTIC_ROLES)
+    return {item.strip() for item in raw_value.split(",") if item.strip()}
+
+
+def should_use_codex(packet: dict[str, Any]) -> bool:
+    """Return whether the role should run through Codex."""
+    role = str(packet.get("role") or "").strip().lower()
+    return role in configured_agentic_roles()
+
+
+def codex_sandbox_mode(packet: dict[str, Any]) -> str:
+    """Return the Codex sandbox mode for one role."""
+    if bool(packet.get("delegation_contract", {}).get("read_only", False)):
+        return "read-only"
+    return "workspace-write"
+
+
+def call_codex_agent(packet: dict[str, Any], *, model: str) -> dict[str, Any]:
+    """Run a role through Codex so it can inspect or modify the repo directly."""
+    role = str(packet.get("role") or "unknown").strip().lower()
+    prompt = build_builder_prompt(packet) if role == "builder" else build_agentic_role_prompt(packet)
     with tempfile.NamedTemporaryFile("w", delete=False, suffix=".json") as schema_file:
         schema_file.write(json.dumps(ROLE_RESULT_SCHEMA))
         schema_path = Path(schema_file.name)
@@ -179,7 +242,7 @@ def call_builder_agent(packet: dict[str, Any], *, model: str) -> dict[str, Any]:
         "never",
         "exec",
         "-s",
-        "workspace-write",
+        codex_sandbox_mode(packet),
         "--skip-git-repo-check",
         "--ephemeral",
         "-C",
@@ -190,7 +253,7 @@ def call_builder_agent(packet: dict[str, Any], *, model: str) -> dict[str, Any]:
         str(schema_path),
         "--output-last-message",
         str(output_path),
-        build_builder_prompt(packet),
+        prompt,
     ]
 
     try:
@@ -214,6 +277,7 @@ def call_builder_agent(packet: dict[str, Any], *, model: str) -> dict[str, Any]:
         raw_result = json.loads(response_text)
         normalized = normalize_result(raw_result)
         normalized["backend"] = "codex_exec"
+        normalized["model"] = model
         return normalized
     except json.JSONDecodeError as error:
         raise RuntimeError(f"Codex builder returned invalid JSON: {error}") from error
@@ -226,7 +290,7 @@ def call_openai(packet: dict[str, Any], *, model: str, base_url: str, timeout: i
     """Call the OpenAI Responses API and return normalized JSON."""
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required to use scripts/openai_agent_cli.py")
+        raise RuntimeError("OPENAI_API_KEY is required to use the repo-owned agent CLI")
 
     request_payload = {
         "model": model,
@@ -269,8 +333,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         packet = load_packet()
-        if str(packet.get("role") or "").strip().lower() == "builder":
-            result = call_builder_agent(packet, model=args.model)
+        if should_use_codex(packet):
+            result = call_codex_agent(packet, model=args.model)
         else:
             result = call_openai(
                 packet,

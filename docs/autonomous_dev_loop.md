@@ -230,7 +230,7 @@ The repo includes a local execution bootstrap for the control plane:
 - `scripts/run_autonomous_cycle.sh`
 - `scripts/verify_project.sh`
 - `scripts/local_agent_runner.py`
-- `scripts/openai_agent_cli.py`
+- `tools/agent_cli/cli.py`
 
 Execution model:
 
@@ -241,9 +241,10 @@ Execution model:
 - if `AUTONOMOUS_AGENT_RUNNER` is not configured, `scripts/local_agent_runner.py` generates structured local role packets for `prework -> planner -> builder -> reviewer -> QA`
 - `docs/agents/prework_agent.md` defines the read-only prep phase that accelerates later roles by mapping likely changes, blockers, and proof requirements
 - `M13B` is the milestone that tracks real local AI backend integration for `AUTONOMOUS_AGENT_CLI`
-- `scripts/openai_agent_cli.py` is the repo-native role CLI for `AUTONOMOUS_AGENT_CLI`
+- `tools/agent_cli/cli.py` is the canonical repo-native role CLI for `AUTONOMOUS_AGENT_CLI`
 - when that CLI receives a `builder` packet, it must be agentic and repo-writing rather than packet-evaluative; the current repo-native path does that by invoking `codex exec`
 - `AUTONOMOUS_BUILDER_CLI` may be set when the builder should use a different backend from the read-only evaluator roles
+- `scripts/openai_agent_cli.py` remains as a compatibility path during the transition to the tool entrypoint
 - `M13C` is the milestone that defines the reusable `tools/` registry pattern, role-based tool access, and the first `tools/supabase/` capability
 - role packets should carry a delegated task contract with task ownership, read/write mode, bounded write scope, and allowed tool ids
 - reviewer and QA outcomes should be recorded through `scripts/autonomous_controller.py review ...` and `scripts/autonomous_controller.py qa ...`

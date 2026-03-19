@@ -15,4 +15,5 @@ Rules:
 
 Current tools:
 
+- `agent_cli` in `tools/agent_cli/`
 - `supabase` in `tools/supabase/`

@@ -284,7 +284,7 @@ Finish the remaining autonomous setup work so the repo-native control plane can 
 
 Acceptance criteria:
 - `scripts/local_agent_runner.py` can call a configured local AI CLI and normalize its JSON response
-- `scripts/openai_agent_cli.py` exists as the repo-native OpenAI backend adapter for `AUTONOMOUS_AGENT_CLI`
+- `tools/agent_cli/cli.py` exists as the canonical repo-owned backend entrypoint for `AUTONOMOUS_AGENT_CLI`, with `scripts/openai_agent_cli.py` preserved as a compatibility path
 - `scripts/autonomous_controller.py` uses structured reviewer and QA outputs as milestone-close evidence
 - Autonomous setup artifacts are asserted through the controller for this milestone
 - One supervised autonomous cycle runs through the repo-native wrapper and records structured role outputs for the active milestone

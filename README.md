@@ -123,22 +123,23 @@ Repo-native runner options:
 
 - `scripts/local_agent_runner.py` always generates structured role packets under `runs/agent_outputs/`
 - set `AUTONOMOUS_AGENT_CLI` to a local executable that reads one JSON payload from stdin and returns one JSON result on stdout if you want the runner to capture real local AI output
-- `scripts/openai_agent_cli.py` is the repo-native role CLI for `AUTONOMOUS_AGENT_CLI`
+- `tools/agent_cli/cli.py` is the canonical repo-owned role CLI for `AUTONOMOUS_AGENT_CLI`
 - for `builder` packets that CLI is agentic: it invokes `codex exec` so the builder can actually modify the repo instead of only grading a packet
 - set `AUTONOMOUS_BUILDER_CLI` if you want the mutating builder role to use a different backend from the read-only evaluator roles
+- `scripts/openai_agent_cli.py` remains as the implementation source and compatibility path while the tool entrypoint is adopted
 - `M13B` is the milestone that tracks completion of the real local AI backend hookup and proof through the controller loop
 
 Example OpenAI backend setup:
 
 ```sh
 export OPENAI_API_KEY=your_api_key
-export AUTONOMOUS_AGENT_CLI=".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+export AUTONOMOUS_AGENT_CLI=".venv/bin/python tools/agent_cli/cli.py --model gpt-5.4"
 ```
 
 Optional explicit builder override:
 
 ```sh
-export AUTONOMOUS_AGENT_CLI=".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+export AUTONOMOUS_AGENT_CLI=".venv/bin/python tools/agent_cli/cli.py --model gpt-5.4"
 export AUTONOMOUS_BUILDER_CLI="codex -a never exec -s workspace-write"
 ```
 

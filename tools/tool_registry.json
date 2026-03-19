@@ -2,6 +2,13 @@
   "version": 1,
   "tools": [
     {
+      "id": "agent_cli",
+      "name": "Agent CLI",
+      "enabled": true,
+      "spec_path": "tools/agent_cli/tool_spec.json",
+      "description": "Repo-owned autonomous role backend for OpenAI evaluator roles and Codex-driven agentic execution."
+    },
+    {
       "id": "supabase",
       "name": "Supabase",
       "enabled": true,

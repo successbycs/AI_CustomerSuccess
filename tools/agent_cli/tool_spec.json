@@ -1,0 +1,41 @@
+{
+  "id": "agent_cli",
+  "description": "Repo-owned autonomous role backend for OpenAI evaluator roles and Codex-driven agentic role execution.",
+  "development_only": true,
+  "entrypoint": "tools/agent_cli/cli.py",
+  "applicable_milestones": [],
+  "source_of_truth": [
+    "tools/agent_cli/cli.py",
+    "scripts/openai_agent_cli.py"
+  ],
+  "required_backends": [
+    "openai_responses",
+    "codex_exec"
+  ],
+  "backends": [
+    {
+      "id": "openai_responses",
+      "kind": "api",
+      "environment": "development",
+      "optional": false,
+      "notes": "Default evaluator backend for role-packet execution through the OpenAI Responses API."
+    },
+    {
+      "id": "codex_exec",
+      "kind": "local_cli",
+      "environment": "development",
+      "optional": false,
+      "notes": "Repo-aware agentic execution path for builder and other roles that are explicitly configured to run through Codex."
+    }
+  ],
+  "role_access": {
+    "controller": {
+      "operations": [
+        "dispatch_role_packet",
+        "dispatch_agentic_role"
+      ],
+      "write_allowed": false,
+      "approval_required": false
+    }
+  }
+}
