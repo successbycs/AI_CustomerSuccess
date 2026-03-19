@@ -399,9 +399,21 @@ def create_role_packet(
     }
     configured_cli = str(project_state.get("agent_runner", {}).get("cli_command") or "").strip()
     explicit_cli = (cli_command or "").strip()
+    role_env_cli = ""
+    if role == "builder":
+        role_env_cli = str(os.environ.get("AUTONOMOUS_BUILDER_CLI", "")).strip()
     env_cli = str(os.environ.get("AUTONOMOUS_AGENT_CLI", "")).strip()
-    effective_cli_source = "explicit" if explicit_cli else ("env" if env_cli else ("project_state" if configured_cli else ""))
-    effective_cli = explicit_cli or env_cli or configured_cli
+    if explicit_cli:
+        effective_cli_source = "explicit"
+    elif role_env_cli:
+        effective_cli_source = "role_env"
+    elif env_cli:
+        effective_cli_source = "env"
+    elif configured_cli:
+        effective_cli_source = "project_state"
+    else:
+        effective_cli_source = ""
+    effective_cli = explicit_cli or role_env_cli or env_cli or configured_cli
     if effective_cli:
         effective_cli = resolve_cli_command(effective_cli, execution_root=PROJECT_ROOT)
     packet.update(backend_metadata(effective_cli))
@@ -410,6 +422,11 @@ def create_role_packet(
         try:
             packet["result"] = run_local_ai_cli(cli_command=effective_cli, packet=packet, root=root)
             packet["cli_command"] = effective_cli
+            if not changed_files and not delegation_contract["read_only"]:
+                packet["changed_files"] = collect_changed_files(root)
+            packet["artifact_checks"] = [
+                {"path": path, "exists": (root / path).exists()} for path in effective_artifact_paths
+            ]
         except RuntimeError:
             if effective_cli_source == "env" and root != PROJECT_ROOT:
                 packet["runner_mode"] = "repo_native_local_packet"

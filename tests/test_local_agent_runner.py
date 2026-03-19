@@ -357,6 +357,70 @@ def test_local_agent_runner_includes_declared_tools_for_role(tmp_path: Path):
     assert "tools/" in packet["delegation_contract"]["write_scope"]
 
 
+def test_local_agent_runner_refreshes_changed_files_after_builder_cli(monkeypatch, tmp_path: Path):
+    create_file(tmp_path, "docs/agents/builder_agent.md", "# Builder Agent Prompt\n\nRead:\n- `docs/implementation_plan.md`\n")
+    create_file(
+        tmp_path,
+        "docs/implementation_plan.md",
+        "## M19 Role-based search visibility tracking and ranking intelligence\nStatus: `in_progress`\n\nObjective:\nTest objective\n",
+    )
+    create_file(tmp_path, "project_state.json", json.dumps({"current_focus": "M19", "agent_runner": {}}))
+    create_file(
+        tmp_path,
+        "milestone_registry.json",
+        json.dumps(
+            {
+                "milestones": [
+                    {
+                        "id": "M19",
+                        "title": "Role-based search visibility tracking and ranking intelligence",
+                        "status": "in_progress",
+                        "dependencies": [],
+                        "verify": ["pytest tests/test_search_visibility.py"],
+                    }
+                ]
+            }
+        ),
+    )
+    create_file(tmp_path, "runs/run_history.json", "[]")
+
+    changed_sequences = [
+        ["docs/implementation_plan.md"],
+        ["docs/implementation_plan.md", "services/search_visibility.py"],
+    ]
+
+    monkeypatch.setattr(
+        local_agent_runner,
+        "collect_changed_files",
+        lambda _root: changed_sequences.pop(0),
+    )
+    monkeypatch.setattr(
+        local_agent_runner,
+        "run_local_ai_cli",
+        lambda **kwargs: {
+            "status": "in_progress",
+            "summary": "builder updated search visibility implementation",
+            "issues": [],
+            "manual_checks_required": True,
+            "manual_checks_complete": False,
+        },
+    )
+    monkeypatch.setenv("AUTONOMOUS_AGENT_CLI", ".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4")
+
+    packet = local_agent_runner.create_role_packet(
+        root=tmp_path,
+        prompt_path=tmp_path / "docs/agents/builder_agent.md",
+        milestone_id="M19",
+        changed_files=[],
+        artifact_paths=[],
+    )
+
+    assert packet["changed_files"] == [
+        "docs/implementation_plan.md",
+        "services/search_visibility.py",
+    ]
+
+
 def test_local_agent_runner_recognizes_auditor_roles(tmp_path: Path):
     create_file(tmp_path, "docs/agents/closeout_auditor_agent.md", "# Closeout Auditor Agent Prompt\n")
     create_file(tmp_path, "docs/implementation_plan.md", "## M17 Internal launch readiness\nStatus: `complete`\n")

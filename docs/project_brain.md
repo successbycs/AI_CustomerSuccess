@@ -27,12 +27,13 @@ This file is a short operational memory for the repository. It should stay conci
 - container proof script: `scripts/prove_container_autonomous_loop.sh`
 - audit script: `scripts/autonomous_audit.py`
 - milestone audit runner: `scripts/milestone_auditor.py`
-- OpenAI CLI adapter: `scripts/openai_agent_cli.py`
+- role CLI adapter: `scripts/openai_agent_cli.py`
 - tool registry: `tools/tool_registry.json`
 
 ## Current Operating Assumptions
 
-- current active milestone is `M18`
+- current active milestone is `M19`
+
 
 
 
@@ -45,7 +46,8 @@ This file is a short operational memory for the repository. It should stay conci
 - historical audit gaps are filled by the manual `Backfill Auditor`
 - `AUTONOMOUS_AGENT_RUNNER` is optional; without it, `scripts/local_agent_runner.py` generates structured local role packets for prework, planner, builder, reviewer, and QA
 - `AUTONOMOUS_AGENT_CLI` can point at a local AI CLI that reads JSON from stdin and returns JSON on stdout; the repo-native runner will capture that structured result
-- `scripts/openai_agent_cli.py` is the default repo-native example for wiring the control plane to the OpenAI API
+- `scripts/openai_agent_cli.py` is the default repo-native role CLI; for `builder` packets it now invokes `codex exec` so the builder is agentic and can actually change the repo
+- `AUTONOMOUS_BUILDER_CLI` may override the mutating builder backend separately from the read-only evaluator roles
 - `M13B`, `M13C`, `M13D`, and `M13E` are complete
 - `supabase/core_persistence_schema.sql` is now the repo-owned schema contract for the core Supabase tables used by exports, candidate persistence, and run tracking
 - `M13C` defines the reusable repo pattern for `tools/`, tool registry schema, role-based tool access, and the first `tools/supabase/` capability layer

@@ -241,7 +241,9 @@ Execution model:
 - if `AUTONOMOUS_AGENT_RUNNER` is not configured, `scripts/local_agent_runner.py` generates structured local role packets for `prework -> planner -> builder -> reviewer -> QA`
 - `docs/agents/prework_agent.md` defines the read-only prep phase that accelerates later roles by mapping likely changes, blockers, and proof requirements
 - `M13B` is the milestone that tracks real local AI backend integration for `AUTONOMOUS_AGENT_CLI`
-- `scripts/openai_agent_cli.py` is the repo-native OpenAI adapter for `AUTONOMOUS_AGENT_CLI`
+- `scripts/openai_agent_cli.py` is the repo-native role CLI for `AUTONOMOUS_AGENT_CLI`
+- when that CLI receives a `builder` packet, it must be agentic and repo-writing rather than packet-evaluative; the current repo-native path does that by invoking `codex exec`
+- `AUTONOMOUS_BUILDER_CLI` may be set when the builder should use a different backend from the read-only evaluator roles
 - `M13C` is the milestone that defines the reusable `tools/` registry pattern, role-based tool access, and the first `tools/supabase/` capability
 - role packets should carry a delegated task contract with task ownership, read/write mode, bounded write scope, and allowed tool ids
 - reviewer and QA outcomes should be recorded through `scripts/autonomous_controller.py review ...` and `scripts/autonomous_controller.py qa ...`
@@ -258,6 +260,7 @@ After the QA step:
 - if verification, review, and QA have all passed, the controller may mark the milestone `complete`
 - after completion, the controller should trigger the `Closeout Auditor`
 - if QA identifies fixable gaps, the milestone remains `in_progress` and loops back through builder -> reviewer -> QA
+- builder packets should capture post-run changed files from the actual agentic implementation pass, not only the pre-run repo diff
 - if QA identifies an unresolved blocker, the controller should mark the milestone `blocked` and stop for human review
 
 ## Post-Verify Retry Rule

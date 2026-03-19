@@ -123,7 +123,9 @@ Repo-native runner options:
 
 - `scripts/local_agent_runner.py` always generates structured role packets under `runs/agent_outputs/`
 - set `AUTONOMOUS_AGENT_CLI` to a local executable that reads one JSON payload from stdin and returns one JSON result on stdout if you want the runner to capture real local AI output
-- `scripts/openai_agent_cli.py` is the repo-native OpenAI backend adapter for `AUTONOMOUS_AGENT_CLI`
+- `scripts/openai_agent_cli.py` is the repo-native role CLI for `AUTONOMOUS_AGENT_CLI`
+- for `builder` packets that CLI is agentic: it invokes `codex exec` so the builder can actually modify the repo instead of only grading a packet
+- set `AUTONOMOUS_BUILDER_CLI` if you want the mutating builder role to use a different backend from the read-only evaluator roles
 - `M13B` is the milestone that tracks completion of the real local AI backend hookup and proof through the controller loop
 
 Example OpenAI backend setup:
@@ -131,6 +133,13 @@ Example OpenAI backend setup:
 ```sh
 export OPENAI_API_KEY=your_api_key
 export AUTONOMOUS_AGENT_CLI=".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+```
+
+Optional explicit builder override:
+
+```sh
+export AUTONOMOUS_AGENT_CLI=".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4"
+export AUTONOMOUS_BUILDER_CLI="codex -a never exec -s workspace-write"
 ```
 
 Operator-facing control-plane summary:
@@ -143,6 +152,7 @@ Operator-facing control-plane summary:
 - the controller now reports datastore capability state in `status` and hard-blocks schema-admin milestones like `M15` when no DB-admin path is configured
 - `prework`, `planner`, `builder`, `reviewer`, and `qa` are separate role phases. Their prompt files live under `docs/agents/`.
 - `scripts/local_agent_runner.py` creates one role packet per phase and sends that packet to the configured backend when `AUTONOMOUS_AGENT_CLI` is set.
+- after a successful builder run, the local runner refreshes the changed-file snapshot so the saved packet reflects what the agent actually changed.
 - A role packet is the saved JSON handoff for one phase. It contains the milestone context, changed files, artifact checks, recent history evidence, and the role result.
 - Role packets now also include a delegated task contract with `task_id`, execution mode, bounded write scope, and allowed tool ids.
 - Role packets now also include the controller’s retry state so planner/builder can see whether the current iteration is a fresh pass, a retry, or an externally blocked stop condition.

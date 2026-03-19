@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -67,3 +68,36 @@ def test_normalize_result_defaults_invalid_status():
 
     assert result["status"] == "in_progress"
     assert result["issues"] == ["gap detected"]
+
+
+def test_call_builder_agent_uses_codex_exec_and_parses_last_message(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_run(command, *, capture_output, text, check):
+        captured["command"] = command
+        output_index = command.index("--output-last-message") + 1
+        Path(command[output_index]).write_text(
+            json.dumps(
+                {
+                    "status": "in_progress",
+                    "summary": "builder changed files",
+                    "issues": [],
+                    "manual_checks_required": True,
+                    "manual_checks_complete": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(openai_agent_cli, "codex_command", lambda: "/usr/bin/codex")
+    monkeypatch.setattr(openai_agent_cli.subprocess, "run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    result = openai_agent_cli.call_builder_agent({"role": "builder", "milestone": {"id": "M19"}}, model="gpt-5.4")
+
+    assert result["status"] == "in_progress"
+    assert result["summary"] == "builder changed files"
+    assert result["backend"] == "codex_exec"
+    assert captured["command"][0] == "/usr/bin/codex"
+    assert "--output-schema" in captured["command"]

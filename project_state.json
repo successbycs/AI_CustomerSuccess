@@ -78,6 +78,7 @@
     "enabled": false,
     "command_contract": "AUTONOMOUS_AGENT_RUNNER should point to a local executable that accepts: <prompt_path> <milestone_id>",
     "recommended_openai_cli": ".venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4",
+    "recommended_builder_cli": "AUTONOMOUS_AGENT_CLI='.venv/bin/python scripts/openai_agent_cli.py --model gpt-5.4' or AUTONOMOUS_BUILDER_CLI='codex -a never exec ...' when the builder must be repo-writing and agentic",
     "review_and_qa_recording_required": true,
     "repo_native_runner": "scripts/local_agent_runner.py"
   }
